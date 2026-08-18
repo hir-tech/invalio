@@ -1,0 +1,3093 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>INVALIO — インヴァリオ</title>
+  <!-- ===== ホーム画面に追加でアプリ化（PWA） ===== -->
+  <meta name="theme-color" content="#04061a">
+  <meta name="description" content="INVALIO — 波及する原因を重ねて打ち消し合うパズル">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- iOS（iPhone/iPad）でアプリっぽく全画面表示 -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="INVALIO">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+  <style>
+    :root {
+      --bg: #05060c;
+      --line: rgba(120, 150, 220, .09);
+      --text: #e8ecff;
+      --muted: #828cb0;
+      --off: #1f2740;
+      --off-edge: rgba(130, 160, 230, .14);
+      --need: #38f0ff;
+      --need-glow: rgba(56, 240, 255, .55);
+      --good: #48ff9b;
+      --good-glow: rgba(72, 255, 155, .6);
+      --bad: #ff3d6e;
+      --bad-glow: rgba(255, 61, 110, .55);
+      --wall: #0c0f18;
+      --wall-edge: rgba(120, 150, 220, .07);
+      --accent: #c07bff;
+      --panel: rgba(16, 20, 36, .72);
+      --panel-edge: rgba(120, 150, 220, .16);
+      --font: "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+    }
+
+    html {
+      background: #03040a;
+    }
+
+    body {
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100%;
+      display: flex;
+      align-items: flex-start;
+      /* ゲーム画面は上ぞろえ（縦中央だと上下に余白ができるため） */
+      justify-content: center;
+      overflow-x: hidden;
+      letter-spacing: .02em;
+    }
+
+    /* background video + themed tint */
+    #bgvideo {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -3;
+      pointer-events: none;
+      /* 独立したGPUレイヤーに載せ、UIの再描画で動画がカクつくのを防ぐ */
+      transform: translateZ(0);
+      will-change: transform;
+      backface-visibility: hidden;
+      contain: strict;
+    }
+
+    #bgtint {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      transition: background .5s ease;
+      background: radial-gradient(1200px 800px at 18% -10%, var(--bg1) 0, transparent 55%),
+        radial-gradient(1000px 700px at 100% 110%, var(--bg2) 0, transparent 55%),
+        var(--tint, rgba(4, 6, 20, .5));
+      transform: translateZ(0);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
+      background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 46px 46px;
+      mask-image: radial-gradient(circle at 50% 42%, #000 0, transparent 80%);
+      -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 0, transparent 80%);
+      opacity: .28;
+      transform: translateZ(0);
+    }
+
+    #app {
+      position: relative;
+      z-index: 1;
+      width: min(720px, 100vw);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      /* 余りは上下に均等配分。加えて最低限の上下余白を確保 */
+      padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(22px + env(safe-area-inset-bottom, 0px));
+    }
+
+    header.top {
+      position: relative;
+      text-align: center;
+      margin-bottom: 4px;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: clamp(24px, 6.5vw, 34px);
+      letter-spacing: .3em;
+      margin: 0 0 2px;
+      padding-left: .3em;
+      opacity: 1;
+      background: linear-gradient(180deg, #ffffff 5%, var(--accent) 95%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 30px var(--need-glow);
+      transition: .4s;
+    }
+
+    .tag {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0;
+      letter-spacing: .12em;
+      transition: .4s;
+    }
+
+    .worldbar {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 12px 0 2px;
+    }
+
+    /* ===== BGM選択ドロップダウン ===== */
+    .bgmselect {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      background-color: rgba(255, 255, 255, .04);
+      border: 1px solid var(--panel-edge);
+      border-radius: 12px;
+      padding: 9px 34px 9px 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .16s, background .16s;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%239aa4bf' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    .bgmselect:hover {
+      border-color: var(--accent);
+      background-color: rgba(255, 255, 255, .07);
+    }
+
+    .bgmselect:focus {
+      border-color: var(--accent);
+    }
+
+    .bgmselect option {
+      color: #0a0d18;
+      background: #eef1f8;
+    }
+
+    /* 設定画面：右寄せで幅を確保 */
+    .setrow .bgmselect {
+      max-width: 58%;
+    }
+
+    /* タイトル画面：中央・横幅いっぱい */
+    .worldpick .bgmselect {
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding-left: 34px;
+    }
+
+    .worldbar .wlabel {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .24em;
+      align-self: center;
+      margin-right: 2px;
+      opacity: .7;
+    }
+
+    .wchip {
+      font-size: 11px;
+      letter-spacing: .06em;
+      padding: 4px 10px;
+      border-radius: 20px;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid var(--panel-edge);
+      background: rgba(255, 255, 255, .03);
+      color: var(--muted);
+      transition: .16s;
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .wchip:hover {
+      color: var(--text);
+      border-color: var(--wc, #c07bff);
+    }
+
+    .wchip .wdot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--wc, #c07bff);
+      box-shadow: 0 0 6px var(--wc, #c07bff);
+    }
+
+    .wchip.cur {
+      color: #fff;
+      border-color: var(--wc, #c07bff);
+      background: color-mix(in srgb, var(--wc, #c07bff) 16%, transparent);
+      box-shadow: 0 0 14px color-mix(in srgb, var(--wc, #c07bff) 40%, transparent);
+    }
+
+    .levelbar {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 6px;
+      margin: 14px 0 8px;
+      flex-wrap: wrap;
+    }
+
+    .levtab {
+      min-width: 72px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-edge);
+      background: rgba(255, 255, 255, .03);
+      cursor: pointer;
+      transition: .18s;
+      user-select: none;
+      text-align: center;
+      line-height: 1.25;
+    }
+
+    .levtab:hover {
+      border-color: var(--accent);
+    }
+
+    .levtab .lv {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+
+    .levtab .lt {
+      font-size: 11.5px;
+      color: var(--muted);
+      opacity: .78;
+    }
+
+    .levtab.cur {
+      border-color: var(--accent);
+      background: rgba(192, 123, 255, .12);
+      box-shadow: 0 0 16px rgba(192, 123, 255, .25);
+    }
+
+    .levtab.cur .lv {
+      color: var(--accent);
+    }
+
+    .levtab.cur .lt {
+      color: var(--text);
+      opacity: 1;
+    }
+
+    .levtab.done .lv {
+      color: var(--good);
+    }
+
+    .levtab.locked {
+      opacity: .3;
+      cursor: not-allowed;
+    }
+
+    .stagebar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 4px 0 8px;
+      flex-wrap: wrap;
+    }
+
+    .dot {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-edge);
+      background: rgba(255, 255, 255, .03);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: .18s;
+      user-select: none;
+    }
+
+    .dot:hover {
+      border-color: var(--need);
+      color: var(--text);
+    }
+
+    .dot.cur {
+      border-color: var(--need);
+      color: #032;
+      background: var(--need);
+      box-shadow: 0 0 14px var(--need-glow);
+    }
+
+    .dot.done {
+      color: var(--good);
+      border-color: rgba(72, 255, 155, .4);
+    }
+
+    .dot.done.cur {
+      color: #032;
+      background: var(--need);
+    }
+
+    .dot.locked {
+      opacity: .32;
+      cursor: not-allowed;
+    }
+
+    .stagehead {
+      text-align: center;
+    }
+
+    .stagehead .name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .1em;
+    }
+
+    .stagehead .name b {
+      color: var(--need);
+      font-weight: 700;
+    }
+
+    .intro {
+      color: var(--muted);
+      font-size: 12.5px;
+      margin: 5px auto 0;
+      max-width: 580px;
+      line-height: 1.6;
+      min-height: 2.5em;
+    }
+
+    .statusrow {
+      display: flex;
+      justify-content: center;
+      gap: 22px;
+      margin: 10px 0 2px;
+      font-size: 14.5px;
+      color: var(--muted);
+    }
+
+    .statusrow b {
+      font-size: 1.05em;
+    }
+
+    .statusrow .moves.over b {
+      color: var(--bad);
+    }
+
+    /* フリーモード：手数目標バー */
+    .freebar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 4px 0 2px;
+      font-size: 13px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+
+    .freebar .fb-tag {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      color: #04121a;
+      background: var(--good);
+      border-radius: 12px;
+      padding: 2px 8px;
+    }
+
+    .freebar .fb-label {
+      color: var(--text);
+    }
+
+    .freebar .fb-target b {
+      color: var(--good);
+      font-size: 1.15em;
+    }
+
+    .freebar .fb-opt {
+      opacity: .8;
+    }
+
+    .freebar .fb-opt b {
+      color: var(--accent);
+    }
+
+    .freebar .fb-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-edge);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .freebar .fb-btn:disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+
+    /* ===== アクセシビリティ ===== */
+    body.cb .cell::after {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: calc(var(--cell)*.44);
+      font-weight: 800;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    body.cb .cell.good::after {
+      content: "✓";
+      color: #04121a;
+    }
+
+    body.cb .cell.bad::after {
+      content: "✕";
+      color: #04121a;
+    }
+
+    body.cb .cell.need::after {
+      content: "•";
+      color: var(--need);
+      text-shadow: 0 0 8px var(--need-glow);
+    }
+
+    body.reduce-motion *,
+    body.reduce-motion *::before,
+    body.reduce-motion *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+
+    body.reduce-motion .wave {
+      display: none !important;
+    }
+
+    #confirmdlg {
+      z-index: 60;
+    }
+
+    .statusrow b {
+      color: var(--text);
+    }
+
+    .statusrow .rem b {
+      color: var(--bad);
+    }
+
+    .statusrow .rem.zero b {
+      color: var(--good);
+    }
+
+    .boardwrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 4px 0;
+    }
+
+    /* 盤面＋トレイをまとめる（余りは #app 側で上下に均等配分） */
+    .playarea {
+      flex: 0 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      min-height: 0;
+      margin: 6px 0;
+    }
+
+    .board {
+      display: grid;
+      gap: 0;
+      padding: 12px;
+      border-radius: 16px;
+      position: relative;
+      background: linear-gradient(180deg, rgba(18, 22, 42, .6), rgba(8, 10, 20, .6));
+      border: 1px solid var(--panel-edge);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .5), inset 0 0 40px rgba(40, 120, 200, .05);
+    }
+
+    .board.win {
+      animation: boardwin .9s ease;
+    }
+
+    @keyframes boardwin {
+      40% {
+        box-shadow: 0 0 60px var(--good-glow), inset 0 0 60px rgba(72, 255, 155, .15);
+      }
+    }
+
+    .cell {
+      position: relative;
+      width: var(--cell);
+      height: var(--cell);
+    }
+
+    .cell .node {
+      position: absolute;
+      inset: 14%;
+      border-radius: 50%;
+      transition: background .25s, box-shadow .3s, border-color .25s, transform .2s;
+    }
+
+    .cell .ring {
+      position: absolute;
+      inset: 6%;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      transition: .25s;
+      pointer-events: none;
+    }
+
+    /* off, no goal */
+    .cell .node {
+      background: var(--off);
+      border: 1px solid var(--off-edge);
+    }
+
+    /* goal-on but currently off => need */
+    .cell.need .ring {
+      border-color: var(--need);
+      box-shadow: 0 0 12px var(--need-glow);
+      animation: needp 1.4s ease-in-out infinite;
+    }
+
+    .cell.need .node {
+      background: rgba(56, 240, 255, .07);
+    }
+
+    @keyframes needp {
+
+      0%,
+      100% {
+        opacity: .55;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.04);
+      }
+    }
+
+    /* on & goal-on => good */
+    .cell.good .node {
+      background: var(--good);
+      border-color: var(--good);
+      box-shadow: 0 0 16px var(--good-glow), 0 0 30px rgba(72, 255, 155, .3);
+    }
+
+    .cell.good .ring {
+      border-color: rgba(72, 255, 155, .35);
+    }
+
+    /* on & goal-off => bad (overshoot) */
+    .cell.bad .node {
+      background: var(--bad);
+      border-color: var(--bad);
+      box-shadow: 0 0 16px var(--bad-glow), 0 0 28px rgba(255, 61, 110, .3);
+    }
+
+    /* on & no-goal handled by bad (goal-off). off & no goal = neutral */
+    .cell.wall .node {
+      background: var(--wall);
+      border: 1px solid var(--wall-edge);
+      box-shadow: none;
+      border-radius: 7px;
+      inset: 12%;
+    }
+
+    .cell.wall .ring {
+      display: none;
+    }
+
+    .cell.placeable {
+      cursor: pointer;
+    }
+
+    .cell.pv .node {
+      transform: scale(1.12);
+    }
+
+    .cell.pv .ring {
+      border-color: var(--accent);
+      box-shadow: 0 0 14px rgba(192, 123, 255, .5);
+    }
+
+    .cell.pvc .node {
+      box-shadow: 0 0 20px rgba(192, 123, 255, .6);
+    }
+
+    /* shockwave */
+    .wave {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      pointer-events: none;
+      will-change: transform, opacity;
+      animation: wave .6s ease-out forwards;
+    }
+
+    /* width/height ではなく transform: scale で拡大しレイアウトを起こさない（GPU合成） */
+    @keyframes wave {
+      0% {
+        transform: translate(-50%, -50%) scale(.1);
+        opacity: .9;
+      }
+
+      100% {
+        transform: translate(-50%, -50%) scale(3.4);
+        opacity: 0;
+      }
+    }
+
+    .causeglyph {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: calc(var(--cell)*.5);
+      pointer-events: none;
+      animation: cg .6s ease-out forwards;
+      text-shadow: 0 0 16px rgba(192, 123, 255, .8);
+    }
+
+    @keyframes cg {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(.3);
+      }
+
+      30% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.5);
+      }
+    }
+
+    .cell.flip .node {
+      animation: flip .4s ease;
+    }
+
+    @keyframes flip {
+      50% {
+        transform: scale(.7);
+      }
+    }
+
+    /* tray */
+    .tray {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 12px 0 4px;
+    }
+
+    .piece {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 9px 12px 7px;
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      background: var(--panel);
+      border: 1px solid var(--panel-edge);
+      transition: .16s;
+      min-width: 64px;
+    }
+
+    .piece:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .piece.sel {
+      border-color: var(--accent);
+      box-shadow: 0 0 18px rgba(192, 123, 255, .4);
+      background: rgba(192, 123, 255, .08);
+    }
+
+    .piece.empty {
+      opacity: .3;
+      pointer-events: none;
+      filter: grayscale(1);
+    }
+
+    .mini {
+      display: grid;
+      grid-template-columns: repeat(3, 9px);
+      grid-template-rows: repeat(3, 9px);
+      gap: 2px;
+    }
+
+    .mini i {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--off);
+    }
+
+    .mini i.on {
+      background: var(--accent);
+      box-shadow: 0 0 6px rgba(192, 123, 255, .7);
+    }
+
+    .mini i.ctr.on {
+      background: #fff;
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .plabel {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+
+    .pcount {
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .pcount b {
+      color: var(--accent);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .btn {
+      background: var(--panel);
+      border: 1px solid var(--panel-edge);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: .15s;
+      font-family: var(--font);
+      letter-spacing: .04em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover {
+      border-color: var(--need);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(56, 240, 255, .2);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn.primary {
+      background: var(--need);
+      color: #022;
+      border-color: var(--need);
+      font-weight: 700;
+    }
+
+    .btn:disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+
+    .hint {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 12px;
+      line-height: 1.7;
+    }
+
+    .hint kbd {
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid var(--panel-edge);
+      border-radius: 5px;
+      padding: 1px 6px;
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .swatch {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(3, 5, 12, .72);
+      backdrop-filter: blur(4px);
+    }
+
+    .overlay.show {
+      display: flex;
+      animation: fade .3s ease;
+    }
+
+    @keyframes fade {
+      from {
+        opacity: 0;
+      }
+    }
+
+    .card {
+      width: min(420px, 88vw);
+      text-align: center;
+      padding: 30px 26px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(20, 26, 48, .95), rgba(10, 12, 24, .95));
+      border: 1px solid rgba(72, 255, 155, .3);
+      box-shadow: 0 0 60px rgba(72, 255, 155, .2);
+    }
+
+    /* Level クリア専用画面 */
+    .lvcard {
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      box-shadow: 0 0 72px color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+
+    .lvcard h2 {
+      color: var(--good);
+      font-size: 26px;
+      letter-spacing: .12em;
+      text-shadow: 0 0 24px var(--good-glow);
+    }
+
+    .lcburst {
+      font-size: 42px;
+      line-height: 1;
+      margin-bottom: 4px;
+      color: var(--accent);
+      text-shadow: 0 0 26px var(--accent);
+      animation: lcpop .55s ease;
+    }
+
+    @keyframes lcpop {
+      0% {
+        transform: scale(.2) rotate(-25deg);
+        opacity: 0;
+      }
+
+      60% {
+        transform: scale(1.25) rotate(10deg);
+      }
+
+      100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+      }
+    }
+
+    #lcMsg {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+      margin: 8px 0 18px;
+    }
+
+    #lcMsg b {
+      color: var(--accent);
+    }
+
+    .lcbtns {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .lcbtns .bigbtn {
+      width: min(280px, 74vw);
+      margin: 0 auto;
+    }
+
+    /* クリア画面の星（レベル数だけ／全クリは10個） */
+    .starrow {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      flex-wrap: wrap;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .starrow .st {
+      font-size: 26px;
+      display: inline-block;
+      transform: scale(0);
+      animation: starpop .5s ease forwards;
+      animation-delay: calc(var(--i) * .09s);
+    }
+
+    @keyframes starpop {
+      0% {
+        transform: scale(0) rotate(-40deg);
+        opacity: 0;
+      }
+
+      60% {
+        transform: scale(1.35) rotate(12deg);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+      }
+    }
+
+    #levelclear .starrow .st {
+      color: var(--good);
+      text-shadow: 0 0 12px var(--good-glow);
+    }
+
+    #allclear .starrow {
+      gap: 5px;
+    }
+
+    #allclear .starrow .st {
+      font-size: 30px;
+      text-shadow: 0 0 16px currentColor;
+      animation: starpop .55s ease forwards, acshine 2.2s ease-in-out infinite;
+      animation-delay: calc(var(--i) * .1s), calc(var(--i) * .1s + .55s);
+    }
+
+    @keyframes acshine {
+
+      0%,
+      100% {
+        filter: brightness(1);
+        transform: translateY(0) scale(1);
+      }
+
+      50% {
+        filter: brightness(1.5);
+        transform: translateY(-3px) scale(1.12);
+      }
+    }
+
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      letter-spacing: .2em;
+      color: var(--good);
+      text-shadow: 0 0 20px var(--good-glow);
+    }
+
+    .card .rword {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .3em;
+      margin-bottom: 14px;
+    }
+
+    .card p {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+      margin: 0 0 20px;
+    }
+
+    .card .st {
+      color: var(--need);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 30;
+      background: var(--panel);
+      border: 1px solid var(--panel-edge);
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      opacity: 0;
+      transition: .3s;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ===================== OUT-GAME SCREENS (title / settings / how-to) ===================== */
+    .screen {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 18px;
+      overflow-y: auto;
+    }
+
+    .screen.show {
+      display: flex;
+      animation: fade .35s ease;
+    }
+
+    .screen .panel {
+      width: min(440px, 94vw);
+    }
+
+    .panelcard {
+      background: rgba(9, 12, 24, .82);
+      border: 1px solid var(--panel-edge);
+      border-radius: 20px;
+      padding: 22px 20px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+    }
+
+    .screen h3 {
+      letter-spacing: .18em;
+      font-size: 16px;
+      margin: 0 0 12px;
+      text-align: center;
+      color: #fff;
+    }
+
+    /* title */
+    #titlescreen .tlogo {
+      font-weight: 800;
+      font-size: clamp(46px, 15vw, 88px);
+      letter-spacing: .08em;
+      padding-left: .24em;
+      margin: 0;
+      background: linear-gradient(180deg, #fff 4%, var(--accent) 96%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 44px var(--need-glow);
+      text-align: center;
+      transition: .4s;
+    }
+
+    #titlescreen .tsub {
+      color: var(--muted);
+      letter-spacing: .5em;
+      font-size: 12px;
+      text-align: center;
+      margin: 4px 0 0;
+      padding-left: .5em;
+    }
+
+    #titlescreen .ttag {
+      color: var(--text);
+      opacity: .82;
+      font-size: 13px;
+      text-align: center;
+      margin: 14px 0 20px;
+      line-height: 1.7;
+    }
+
+    .bigbtn {
+      display: block;
+      width: min(320px, 82vw);
+      margin: 9px auto;
+      padding: 15px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      color: #fff;
+      cursor: pointer;
+      transition: .16s;
+      letter-spacing: .12em;
+      font-family: var(--font);
+    }
+
+    .bigbtn.primary {
+      background: var(--accent);
+      color: #04121a;
+      box-shadow: 0 0 26px color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+
+    .bigbtn:active {
+      transform: translateY(1px);
+    }
+
+    .bigbtn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .subbtns {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    .subbtns .sbtn,
+    .sbtn {
+      flex: 1;
+      max-width: 150px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--panel-edge);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: .16s;
+    }
+
+    .sbtn:active {
+      transform: translateY(1px);
+    }
+
+    .worldpick {
+      margin: 0 auto 18px;
+      text-align: center;
+    }
+
+    .worldpick .whead {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: .14em;
+      margin-bottom: 9px;
+    }
+
+    /* タイトル画面のWORLD選択：スマホでも改行せず5等分の1行に固定 */
+    .worldpick .worldbar {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .worldpick .wchip {
+      justify-content: center;
+      padding: 8px 3px;
+      gap: 4px;
+      min-width: 0;
+      white-space: nowrap;
+      letter-spacing: 0;
+    }
+
+    .worldpick .wchip .wdot {
+      width: 8px;
+      height: 8px;
+    }
+
+    /* settings rows */
+    .setrow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 2px;
+      border-bottom: 1px solid var(--panel-edge);
+    }
+
+    .setrow .lab {
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .setrow .desc {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .toggle {
+      width: 52px;
+      height: 30px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, .14);
+      position: relative;
+      cursor: pointer;
+      transition: .2s;
+      flex: 0 0 auto;
+    }
+
+    .toggle.on {
+      background: var(--accent);
+    }
+
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      transition: .2s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+    }
+
+    .toggle.on::after {
+      left: 25px;
+    }
+
+    .seg {
+      display: flex;
+      border: 1px solid var(--panel-edge);
+      border-radius: 10px;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+
+    .seg button {
+      padding: 9px 11px;
+      font-size: 12px;
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      cursor: pointer;
+      font-family: var(--font);
+    }
+
+    .seg button.on {
+      background: var(--accent);
+      color: #04121a;
+      font-weight: 700;
+    }
+
+    .closebar {
+      display: flex;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
+    /* in-game menu button */
+    /* ハンバーガー：ゲーム画面ヘッダのロゴと同じ行の右端に配置 */
+    #menuBtn {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-edge);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      z-index: 2;
+    }
+
+    #app.hidden {
+      display: none;
+    }
+
+    /* ===================== MOBILE ===================== */
+    @media (max-width:560px) {
+      #app {
+        padding: calc(12px + env(safe-area-inset-top, 0px)) 8px calc(18px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .logo {
+        font-size: clamp(24px, 7.5vw, 32px);
+        letter-spacing: .26em;
+      }
+
+      .levelbar {
+        margin: 10px 0 6px;
+      }
+
+      .boardwrap {
+        margin: 6px 0;
+      }
+
+      .tray {
+        margin: 10px 0 4px;
+      }
+
+      .statusrow {
+        margin: 8px 0 2px;
+        font-size: 14px;
+      }
+
+      #menuBtn {
+        width: 36px;
+        height: 36px;
+        font-size: 17px;
+      }
+
+      .dot {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+      }
+
+      .levtab {
+        min-width: 62px;
+        padding: 7px 8px;
+      }
+
+      .levtab .lv {
+        font-size: 13px;
+      }
+
+      .levtab .lt {
+        font-size: 11.5px;
+      }
+
+      .btn {
+        padding: 11px 14px;
+        font-size: 13px;
+      }
+
+      .piece {
+        min-width: 54px;
+        padding: 8px 8px 6px;
+      }
+
+      .wchip {
+        padding: 7px 13px;
+        font-size: 12.5px;
+      }
+
+      .legend {
+        font-size: 10.5px;
+        gap: 10px;
+      }
+
+      .hint {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ▼背景動画（WORLDごとに自動で切り替わる）。初期表示は宇宙WORLDの assets/space_bg.mp4。
+     各WORLDの動画は THEMES の video: で指定（assets/space_bg.mp4 / assets/sky_bg.mp4 /
+     assets/forest_bg.mp4 / assets/sea_bg.mp4 / assets/desert_bg.mp4）。
+     この invalio.html と同じ階層の assets/ フォルダに動画を置いてください。 -->
+  <video id="bgvideo" autoplay loop muted playsinline preload="auto" data-src="assets/space_bg.mp4" poster="">
+    <source src="assets/space_bg.mp4" type="video/mp4">
+  </video>
+  <div id="bgtint"></div>
+
+  <!-- ===================== OUT-GAME: タイトル画面 ===================== -->
+  <div class="screen show" id="titlescreen">
+    <div class="panel" style="text-align:center">
+      <!-- <div class="tsub">インヴァリオ</div> -->
+      <h1 class="tlogo" id="titleLogo">INVALIO</h1>
+      <p class="ttag">- A chain of pieces coloring the world -</p>
+      <div class="worldpick panelcard">
+        <div class="whead">WORLD</div>
+        <div class="worldbar"></div>
+        <div class="whead" style="margin-top:16px">BGM</div>
+        <select class="bgmselect" id="trackSelectTitle"></select>
+      </div>
+      <button class="bigbtn primary" id="mainModeBtn">🎯 メインモード</button>
+      <button class="bigbtn" id="freeBtn" style="border-color:var(--good);color:#fff">🕊 フリーモード</button>
+      <div class="subbtns">
+        <button class="sbtn" id="howtoBtn">遊び方</button>
+        <button class="sbtn" id="settingsBtn">設定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OUT-GAME: メインモード（つづきから / はじめから） ===================== -->
+  <div class="screen" id="mainmenu">
+    <div class="panel panelcard" style="text-align:center">
+      <h3>メインモード</h3>
+      <button class="bigbtn primary" id="continueBtn">つづきから</button>
+      <button class="bigbtn" id="newgameBtn">はじめから</button>
+      <div class="closebar" style="margin-top:16px"><button class="sbtn" id="mainBack" style="max-width:170px">←
+          タイトルへ</button></div>
+    </div>
+  </div>
+
+  <!-- ===================== OUT-GAME: フリーモード（つづきから / はじめから） ===================== -->
+  <div class="screen" id="freemenu">
+    <div class="panel panelcard" style="text-align:center">
+      <h3>🕊 フリーモード</h3>
+      <button class="bigbtn primary" id="continueBtnF">つづきから</button>
+      <button class="bigbtn" id="newgameBtnF">はじめから</button>
+      <div class="closebar" style="margin-top:16px"><button class="sbtn" id="freeBack" style="max-width:170px">←
+          タイトルへ</button></div>
+    </div>
+  </div>
+
+  <!-- ===================== OUT-GAME: 設定 ===================== -->
+  <div class="screen" id="settings">
+    <div class="panel panelcard">
+      <h3>設定</h3>
+      <div class="setrow">
+        <div>
+          <div class="lab">サウンド</div>
+          <div class="desc">効果音のオン / オフ</div>
+        </div>
+        <div class="toggle" id="tgSound"></div>
+      </div>
+      <div class="setrow">
+        <div>
+          <div class="lab">音楽</div>
+          <div class="desc">BGM全体のオン / オフ</div>
+        </div>
+        <div class="toggle" id="tgMusic"></div>
+      </div>
+      <div class="setrow">
+        <div>
+          <div class="lab">BGMを選ぶ</div>
+          <div class="desc">プレイ中に流す曲</div>
+        </div>
+        <select class="bgmselect" id="trackSelect"></select>
+      </div>
+      <div class="setrow">
+        <div>
+          <div class="lab">背景動画</div>
+          <div class="desc">オフでバッテリーを節約</div>
+        </div>
+        <div class="toggle" id="tgVideo"></div>
+      </div>
+      <div class="setrow">
+        <div>
+          <div class="lab">バイブ</div>
+          <div class="desc">配置時に軽く振動（対応端末のみ）</div>
+        </div>
+        <div class="toggle" id="tgVibe"></div>
+      </div>
+      <div class="setrow">
+        <div>
+          <div class="lab">色覚サポート</div>
+          <div class="desc">色に加えて記号で状態を区別（✓ • ✕）</div>
+        </div>
+        <div class="toggle" id="tgCb"></div>
+      </div>
+      <div class="setrow">
+        <div>
+          <div class="lab">モーション軽減</div>
+          <div class="desc">点滅・アニメーションを抑える</div>
+        </div>
+        <div class="toggle" id="tgMotion"></div>
+      </div>
+      <div class="setrow" style="border-bottom:0;padding-bottom:4px">
+        <div>
+          <div class="lab">WORLD</div>
+          <div class="desc">世界観（配色・背景動画）を切り替え</div>
+        </div>
+      </div>
+      <div class="worldbar" style="justify-content:flex-start;margin:0 0 6px"></div>
+      <div class="setrow">
+        <div>
+          <div class="lab">進行データ</div>
+          <div class="desc">メイン・フリー両方のクリア状況をリセット</div>
+        </div>
+        <button class="sbtn" id="resetProgBtn" style="max-width:120px">リセット</button>
+      </div>
+      <div class="closebar" style="gap:10px">
+        <button class="sbtn" id="toTitleBtn" style="max-width:150px">タイトルへ</button>
+        <button class="bigbtn" id="settingsClose" style="width:min(200px,58vw);margin:0">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OUT-GAME: 遊び方 ===================== -->
+  <div class="screen" id="howto">
+    <div class="panel panelcard">
+      <h3>遊び方</h3>
+      <p style="font-size:13.5px;line-height:1.95;color:var(--text)">
+        盤面をタップすると、その場に<b style="color:var(--accent)">選んだピース</b>が生まれ、ピースの型にマスが<b>点灯</b>します。<br>
+        ピースが<b>重なったマスは打ち消し合って</b>元に戻ります。これを利用し、<b style="color:var(--good)">目標の形</b>だけ点灯させてください。<br>
+      <div class="legend" style="margin:2px 0 4px">
+        <span><i class="swatch" style="background:var(--good)"></i>正解</span>
+        <span><i class="swatch" style="border:2px solid var(--need);background:transparent"></i>未入力</span>
+        <span><i class="swatch" style="background:var(--bad)"></i>不正解</span>
+      </div>
+      <br>
+      ・トレイでピース（十字・斜め・環…）を選ぶ<br>
+      ・盤面をタップするとその場に置ける<br>
+      ・「取り消し」で1手前に戻せる<br>
+      ・「やり直し」で最初から<br>
+      </p>
+      <div class="closebar" style="margin-top:18px;gap:10px">
+        <button class="sbtn" id="howtoToTitle" style="max-width:150px">タイトルへ</button>
+        <button class="bigbtn" id="howtoClose" style="width:min(200px,58vw);margin:0">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OUT-GAME: メニュー（ハンバーガー） ===================== -->
+  <div class="screen" id="gamemenu">
+    <div class="panel panelcard" style="text-align:center">
+      <h3>メニュー</h3>
+      <button class="bigbtn" id="mnHowto">遊び方</button>
+      <button class="bigbtn" id="mnSettings">設定</button>
+      <div class="closebar" style="margin-top:16px;gap:10px">
+        <button class="sbtn" id="mnToTitle" style="max-width:150px">タイトルへ</button>
+        <button class="bigbtn" id="mnClose" style="width:min(200px,58vw);margin:0">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="top">
+      <h1 class="logo" id="logo">INVALIO</h1>
+      <button id="menuBtn" title="メニュー">☰</button>
+    </header>
+
+    <div class="levelbar" id="levelbar"></div>
+    <div class="stagebar" id="stagebar"></div>
+
+    <div class="statusrow">
+      <div class="rem" id="rem">未成立: <b>–</b></div>
+      <div class="moves" id="movesWrap">手数: <b id="moves">0</b></div>
+    </div>
+
+    <!-- フリーモード用：手数目標バー -->
+    <div class="freebar" id="freebar" style="display:none">
+      <span class="fb-tag">FREE</span>
+      <span class="fb-label">手数目標</span>
+      <button class="fb-btn" id="fbMinus">−</button>
+      <span class="fb-target"><b id="fbTarget">–</b></span>
+      <button class="fb-btn" id="fbPlus">＋</button>
+      <span class="fb-opt">最短 <b id="fbOpt">–</b></span>
+    </div>
+
+    <div class="playarea">
+      <div class="boardwrap">
+        <div class="board" id="board"></div>
+      </div>
+      <div class="tray" id="tray"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="undoBtn">↶ 取り消し</button>
+      <button class="btn" id="resetBtn">⟲ やり直す</button>
+      <button class="btn" id="muteBtn">🔊 音</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <h2 id="winTitle">COMPLETION</h2>
+      <p id="winMsg"></p>
+      <div class="lcbtns">
+        <button class="bigbtn primary" id="nextBtn">次のパズル →</button>
+        <button class="bigbtn" id="winRetry">もう一度</button>
+        <button class="bigbtn" id="winToTitle">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level クリア専用の小画面 -->
+  <div class="overlay" id="levelclear">
+    <div class="card lvcard">
+      <div class="starrow" id="lcStars"></div>
+      <h2 id="lcTitleText">Level 1 クリア！</h2>
+      <p id="lcMsg"></p>
+      <div class="lcbtns">
+        <button class="bigbtn primary" id="lcNext">次のパズルへ</button>
+        <button class="bigbtn" id="lcToTitle">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全クリア（Level 10 クリア！の後に出る） -->
+  <div class="overlay" id="allclear">
+    <div class="card lvcard">
+      <div class="starrow" id="acStars"></div>
+      <h2>ALL CLEAR！</h2>
+      <p id="acMsg">すべてのパズルを制覇！<br><b>PERFECT — おめでとう！</b></p>
+      <div class="lcbtns">
+        <button class="bigbtn primary" id="acReplay">もう一度あそぶ</button>
+        <button class="bigbtn" id="acTitle">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- フリーモードのクリア結果 -->
+  <div class="overlay" id="freeresult">
+    <div class="card lvcard">
+      <h2 id="frTitle">完成！</h2>
+      <p id="frMsg"></p>
+      <div class="lcbtns">
+        <button class="bigbtn primary" id="frNext">次のパズル →</button>
+        <button class="bigbtn" id="frRetry">もう一度</button>
+        <button class="bigbtn" id="frTitle2">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 確認ダイアログ（進行リセット等） -->
+  <div class="overlay" id="confirmdlg">
+    <div class="card" style="border-color:rgba(255,61,110,.4);box-shadow:0 0 50px rgba(255,61,110,.2)">
+      <h2 style="color:var(--bad);text-shadow:0 0 18px var(--bad-glow);font-size:20px">確認</h2>
+      <p id="cfMsg"></p>
+      <div class="lcbtns">
+        <button class="bigbtn" id="cfYes"
+          style="border-color:var(--bad);color:#fff;background:color-mix(in srgb,var(--bad) 18%,transparent)">削除する</button>
+        <button class="bigbtn primary" id="cfNo">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    "use strict";
+    /* ================= CAUSE — 波及する因果パズル ================= */
+    const SHAPES = {
+      dot: [[0, 0]],
+      plus: [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]],
+      ex: [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]],
+      vert: [[0, 0], [-1, 0], [1, 0]],
+      horz: [[0, 0], [0, -1], [0, 1]],
+      box: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]],
+      ring: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]],
+      corners: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
+      tup: [[0, 0], [0, -1], [0, 1], [-1, 0]],
+      star: [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [0, -1], [0, 1], [0, -2], [0, 2]],
+      bslash: [[0, 0], [-1, -1], [1, 1]],
+      fslash: [[0, 0], [-1, 1], [1, -1]],
+    };
+    const PIECE_LABEL = {
+      dot: "点", plus: "十字", ex: "斜め", vert: "縦", horz: "横",
+      box: "塊", ring: "環", corners: "四隅", tup: "T字", star: "星", bslash: "＼", fslash: "／"
+    };
+    const TRAY_ORDER = ['dot', 'plus', 'ex', 'vert', 'horz', 'corners', 'tup', 'bslash', 'fslash', 'ring', 'box', 'star'];
+
+    /* ============================================================
+       WORLDS（世界観）— 見た目・用語・演出のみを変更。ゲームの仕組み・パズル・波及形は不変。
+       ★背景動画の入れ方★
+         各 WORLD の video: に「assets/ フォルダ内の動画ファイル名」を指定しています。
+         下記のファイルを assets/ に置くだけで、その WORLD を選んだとき背景動画が切り替わります。
+            宇宙 = assets/space_bg.mp4   （宇宙の動画：同梱済み）
+            大空 = assets/sky_bg.mp4     ← 「大空」の動画をこの名前で置く
+            森   = assets/forest_bg.mp4  ← 「森」の動画をこの名前で置く
+            海   = assets/sea_bg.mp4     ← 「海」の動画をこの名前で置く
+            砂漠 = assets/desert_bg.mp4  ← 「砂漠」の動画をこの名前で置く
+         ※ ファイル名/場所を変えたい場合は、その WORLD の video: の値を書き換えてください。
+         ※ 動画が無い WORLD は、動画なし（世界観カラーの下地のみ）で表示されます（エラーにはなりません）。
+       ============================================================ */
+    const GAME_NAME = "INVALIO";
+    const HINT_TAIL = ` 重なりは<b>打ち消し合う</b>のが鍵。 乗せると波及範囲をプレビュー、<kbd>右クリック</kbd>で直前の一手を取り消し。`;
+    const THEMES = [
+      {
+        id: "cosmos", jp: "宇宙", title: "COSMOS", wc: "#ffd98a", glyph: "✦", status: "未点灯",
+        video: "assets/space_bg.mp4",   /* ← 宇宙WORLDの背景動画（同梱の宇宙動画） */
+        bgm: "bgm/space.mp3",   /* ← このWORLDのプレイ中BGM */
+        tagline: "Stardust Motel",
+        hint: `盤面をクリックで<span style="color:var(--accent)">星</span>を灯す。生まれた光が周囲の星を明滅させる。` + HINT_TAIL,
+        legend: ["点灯（灯すべき星が灯った）", "未点灯（灯りが必要）", "余計（消すべき星）"],
+        vars: {
+          bg: "#04061a", bg1: "#0a1445", bg2: "#241038", line: "rgba(150,170,255,.07)", off: "#111a3a", offEdge: "rgba(150,175,255,.14)",
+          need: "#bcd0ff", needG: "rgba(188,208,255,.5)", good: "#ffe08a", goodG: "rgba(255,224,138,.6)", bad: "#ff6f8f", badG: "rgba(255,111,143,.5)",
+          wall: "#080b1c", wallEdge: "rgba(150,170,255,.07)", accent: "#ffd98a"
+        }
+      },
+
+      {
+        id: "azure", jp: "大空", title: "AZURE", wc: "#86d8ff", glyph: "✵", status: "未輝",
+        video: "assets/sky_bg.mp4",   /* ← 大空WORLDの背景動画（この名前で動画を置く） */
+        bgm: "bgm/sky.mp3",   /* ← このWORLDのプレイ中BGM */
+        tagline: "Celeste",
+        hint: `盤面をクリックで<span style="color:var(--accent)">光</span>を放つ。広がる輝きが周囲を反転させる。` + HINT_TAIL,
+        legend: ["輝き（輝くべき点が輝いた）", "未輝（輝きが必要）", "眩光（消すべき光）"],
+        vars: {
+          bg: "#041426", bg1: "#0a2a55", bg2: "#0e3a5a", line: "rgba(140,200,255,.07)", off: "#0e2440", offEdge: "rgba(140,200,255,.14)",
+          need: "#9fd8ff", needG: "rgba(159,216,255,.5)", good: "#7fe0ff", goodG: "rgba(127,224,255,.6)", bad: "#ff7a86", badG: "rgba(255,122,134,.5)",
+          wall: "#08182c", wallEdge: "rgba(140,200,255,.07)", accent: "#86d8ff"
+        }
+      },
+
+      {
+        id: "sylva", jp: "森", title: "SYLVA", wc: "#8fe08a", glyph: "✿", status: "未芽",
+        video: "assets/forest_bg.mp4",   /* ← 森WORLDの背景動画（この名前で動画を置く） */
+        bgm: "bgm/forest.mp3",   /* ← このWORLDのプレイ中BGM */
+        tagline: "Echoes of the Forest",
+        hint: `盤面をクリックで<span style="color:var(--accent)">胞子</span>を落とす。菌糸が広がり周囲を芽吹かせる。` + HINT_TAIL,
+        legend: ["芽吹き（芽吹くべき点が芽吹いた）", "未芽（芽吹きが必要）", "繁茂（刈るべき芽）"],
+        vars: {
+          bg: "#06140d", bg1: "#0e3020", bg2: "#10281a", line: "rgba(150,230,170,.06)", off: "#10241a", offEdge: "rgba(150,230,170,.14)",
+          need: "#86d8a0", needG: "rgba(134,216,160,.5)", good: "#b6ff7a", goodG: "rgba(182,255,122,.6)", bad: "#ff8a5c", badG: "rgba(255,138,92,.5)",
+          wall: "#06110b", wallEdge: "rgba(150,230,170,.07)", accent: "#9dff9a"
+        }
+      },
+
+      {
+        id: "abyss", jp: "海", title: "ABYSS", wc: "#6fe0e0", glyph: "◉", status: "未灯",
+        video: "assets/sea_bg.mp4",   /* ← 海WORLDの背景動画（この名前で動画を置く） */
+        bgm: "bgm/sea.mp3",   /* ← このWORLDのプレイ中BGM */
+        tagline: "Aqua Solace",
+        hint: `盤面をクリックで<span style="color:var(--accent)">燐光</span>を落とす。波紋が広がり周囲を反転させる。` + HINT_TAIL,
+        legend: ["点灯（灯すべき燐光が灯った）", "未灯（燐光が必要）", "濁り（消すべき光）"],
+        vars: {
+          bg: "#041820", bg1: "#063040", bg2: "#08404a", line: "rgba(120,220,230,.06)", off: "#0c2a34", offEdge: "rgba(120,220,230,.14)",
+          need: "#6fe0e0", needG: "rgba(111,224,224,.5)", good: "#8ffcff", goodG: "rgba(143,252,255,.6)", bad: "#ff7a9c", badG: "rgba(255,122,156,.5)",
+          wall: "#06161e", wallEdge: "rgba(120,220,230,.07)", accent: "#7bf0e6"
+        }
+      },
+
+      {
+        id: "dune", jp: "砂漠", title: "DUNE", wc: "#e0c58a", glyph: "✸", status: "未煌",
+        video: "assets/desert_bg.mp4",   /* ← 砂漠WORLDの背景動画（この名前で動画を置く） */
+        bgm: "bgm/desert.mp3",   /* ← このWORLDのプレイ中BGM */
+        tagline: "Amber Horizon",
+        hint: `盤面をクリックで<span style="color:var(--accent)">砂</span>を打つ。振動が広がり砂を集散させる。` + HINT_TAIL,
+        legend: ["煌めき（煌めくべき点が煌めいた）", "未煌（煌めきが必要）", "陽炎（消すべき煌めき）"],
+        vars: {
+          bg: "#17110a", bg1: "#2a1e10", bg2: "#33220e", line: "rgba(235,200,150,.06)", off: "#201810", offEdge: "rgba(235,200,150,.14)",
+          need: "#e0c48a", needG: "rgba(224,196,138,.5)", good: "#ffd27a", goodG: "rgba(255,210,122,.6)", bad: "#ff7a5c", badG: "rgba(255,122,92,.5)",
+          wall: "#100b06", wallEdge: "rgba(235,200,150,.07)", accent: "#ffcf8a"
+        }
+      },
+    ];
+    let themeId = "cosmos", curGlyph = "✦", curStatus = "未点灯";
+    function setV(k, v) { document.documentElement.style.setProperty(k, v); }
+    function hexRgba(hex, a) {
+      const h = hex.replace('#', ''); const n = parseInt(h, 16);
+      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+    }
+    /* WORLDごとに背景動画を差し替える（動画ファイルは THEMES の video: で指定） */
+    function setBgVideo(src) {
+      const bv = document.getElementById('bgvideo'); if (!bv || !src) return;
+      if (bv.getAttribute('data-src') !== src) {   // 別の動画のときだけ読み込み直す
+        bv.setAttribute('data-src', src);
+        const s = bv.querySelector('source'); if (s) s.setAttribute('src', src);
+        bv.load();
+      }
+      applyVideoSetting();
+    }
+    /* 設定「背景動画」ON/OFF を反映 */
+    function applyVideoSetting() {
+      const bv = document.getElementById('bgvideo'); if (!bv) return;
+      if (settings.video) { bv.style.display = ''; const pr = bv.play(); if (pr && pr.catch) pr.catch(() => { }); }
+      else { try { bv.pause(); } catch (e) { } bv.style.display = 'none'; }
+    }
+    function applyTheme(id) {
+      const t = THEMES.find(x => x.id === id) || THEMES[0]; themeId = t.id; const v = t.vars;
+      setV('--bg', v.bg); setV('--bg1', v.bg1); setV('--bg2', v.bg2); setV('--line', v.line);
+      setV('--tint', hexRgba(v.bg, 0.5));
+      setV('--off', v.off); setV('--off-edge', v.offEdge);
+      setV('--need', v.need); setV('--need-glow', v.needG);
+      setV('--good', v.good); setV('--good-glow', v.goodG);
+      setV('--bad', v.bad); setV('--bad-glow', v.badG);
+      setV('--wall', v.wall); setV('--wall-edge', v.wallEdge); setV('--accent', v.accent);
+      document.getElementById('logo').textContent = GAME_NAME;
+      setBgVideo(t.video);
+      curGlyph = t.glyph; curStatus = t.status;
+      try { localStorage.setItem('cause_world', t.id); } catch (e) { }
+      renderWorldbar();
+      if (typeof cellEls !== 'undefined' && cellEls.length) update(false);
+      if (typeof updateMusic === 'function') updateMusic();   // WORLD切替でBGMもクロスフェード
+    }
+    function renderWorldbar() {
+      document.querySelectorAll('.worldbar').forEach(wb => {
+        wb.innerHTML = '';
+        THEMES.forEach(t => {
+          const c = document.createElement('div');
+          c.className = 'wchip' + (t.id === themeId ? ' cur' : '');
+          c.style.setProperty('--wc', t.wc);
+          c.innerHTML = `<span class="wdot"></span>${t.jp}`;
+          c.addEventListener('click', () => applyTheme(t.id));
+          wb.appendChild(c);
+        });
+      });
+    }
+
+    const STAGES = [
+      {
+        id: "1-1", lv: 1, intro: "結果を宣言すると原因が生まれ、上下左右も反転する(十字)。輪郭の事象だけを点灯させろ。",
+        start: ["...", "...", "..."],
+        goal: [".O.", "OOO", ".O."],
+        tray: { "plus": 1 }
+      },
+      {
+        id: "1-2", lv: 1, intro: "波は端で欠ける。二つの原因で離れた塊を同時に成立させろ。",
+        start: ["....", "....", "....", "...."],
+        goal: [".O..", "OO..", "..OO", "..O."],
+        tray: { "plus": 2 }
+      },
+      {
+        id: "1-3", lv: 1, intro: "波が重なる事象は二度反転して戻る。打ち消しを読め。",
+        start: ["....", "....", "....", "...."],
+        goal: ["OOOO", "..OO", "OOOO", ".O.."],
+        tray: { "plus": 3 }
+      },
+      {
+        id: "1-4", lv: 1, intro: "『横』は左右に伝わる。十字と組み合わせて描け。",
+        start: ["....", "....", "....", "...."],
+        goal: [".OOO", "OO..", ".OOO", "...."],
+        tray: { "plus": 1, "horz": 2 }
+      },
+      {
+        id: "1-5", lv: 1, intro: "『縦』は上下に伝わる。縦横の線波で骨組みを作れ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: [".OOO.", ".OOO.", ".O.O.", ".O.O.", "....."],
+        tray: { "plus": 1, "vert": 2 }
+      },
+      {
+        id: "1-6", lv: 1, intro: "三種の基本波を織り交ぜろ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: [".O...", "OOOO.", "OO.O.", "O.O..", "O...."],
+        tray: { "plus": 2, "vert": 1, "horz": 1 }
+      },
+      {
+        id: "1-7", lv: 1, intro: "Level 1 の総仕上げ。五つの波を捌け。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: [".O.O.", "OOOO.", "..O..", "..OOO", "OOOO."],
+        tray: { "plus": 2, "vert": 1, "horz": 2 }
+      },
+      {
+        id: "2-1", lv: 2, intro: "『斜め』は四隅へ波及する。十字と交ぜて格子を編め。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["O.O..", ".OO..", "OOOOO", "..OO.", "..O.O"],
+        tray: { "plus": 1, "ex": 2 }
+      },
+      {
+        id: "2-2", lv: 2, intro: "斜めの重なりを利用して形を絞れ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["OOOOO", ".O.O.", "O.O.O", ".OOO.", "..O.."],
+        tray: { "plus": 1, "ex": 2, "horz": 1 }
+      },
+      {
+        id: "2-3", lv: 2, intro: "『四隅』は中心に触れず斜め四点だけを反転させる。飛び地を精密に。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["O.OOO", "..O.O", "OOOOO", "O.O..", "O.O.O"],
+        tray: { "plus": 2, "vert": 1, "corners": 2 }
+      },
+      {
+        id: "2-4", lv: 2, intro: "四隅と十字で対角の構造を作れ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["OO..O", "OO...", ".....", ".O.OO", "OOOOO"],
+        tray: { "plus": 2, "ex": 1, "horz": 1, "corners": 1 }
+      },
+      {
+        id: "2-5", lv: 2, intro: "斜め・四隅・線波を同時に読め。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["O.OO.", ".O.OO", "O.O.O", ".OO..", ".OO.O"],
+        tray: { "plus": 2, "ex": 1, "vert": 1, "corners": 1 }
+      },
+      {
+        id: "2-6", lv: 2, intro: "Level 2 の総仕上げ。斜めの網を張れ。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["O.O.O.", ".OOO.O", "O.O.O.", ".OOOOO", "OOO.O.", "..O..O"],
+        tray: { "plus": 2, "ex": 2, "horz": 1, "corners": 1 }
+      },
+      {
+        id: "2-7", lv: 2, intro: "盤が広がる。斜め系の波を広く使え。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["OO.O..", ".O.OO.", "O..OO.", ".OO...", "...O..", "......"],
+        tray: { "plus": 1, "ex": 1, "vert": 1, "horz": 1, "corners": 1 }
+      },
+      {
+        id: "3-1", lv: 3, intro: "『T字』は非対称に波及する。向きの偏りを整えろ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["O.O..", "O..O.", "OO.OO", ".OO.O", "....O"],
+        tray: { "plus": 2, "tup": 3 }
+      },
+      {
+        id: "3-2", lv: 3, intro: "『点』は自身だけを反転させる精密工具。端を仕上げろ。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["O....O", "..O...", ".O.OO.", "..OO..", "..O.O.", ".....O"],
+        tray: { "dot": 3, "plus": 1, "ex": 1 }
+      },
+      {
+        id: "3-3", lv: 3, intro: "『＼』は左上-右下の対角に伝わる。斜めの筋を通せ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["O..O.", "..OOO", "O..O.", ".....", "O.O.O"],
+        tray: { "plus": 1, "corners": 1, "bslash": 3 }
+      },
+      {
+        id: "3-4", lv: 3, intro: "『／』は右上-左下の対角。逆の斜線を通せ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: [".O..O", "OOO..", ".O..O", "...O.", "O.O.O"],
+        tray: { "plus": 1, "ex": 1, "fslash": 3 }
+      },
+      {
+        id: "3-5", lv: 3, intro: "二種の斜線を交差させろ。",
+        start: [".....", ".....", ".....", ".....", "....."],
+        goal: ["....O", ".OOO.", ".OOO.", ".OOO.", "O...O"],
+        tray: { "dot": 1, "plus": 1, "bslash": 2, "fslash": 2 }
+      },
+      {
+        id: "3-6", lv: 3, intro: "変則波を組み合わせて広く収束させろ。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["..OO.O", "..O.O.", "...O.O", "....O.", "O..O.O", "....O."],
+        tray: { "plus": 1, "ex": 1, "corners": 1, "tup": 1, "bslash": 1, "fslash": 1 }
+      },
+      {
+        id: "3-7", lv: 3, intro: "Level 3 の総仕上げ。あらゆる変則波を捌け。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["O....O", ".OO.O.", ".OO.O.", "...O.O", ".O.O..", "...O.."],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "corners": 1, "tup": 1, "bslash": 1, "fslash": 1 }
+      },
+      {
+        id: "4-1", lv: 4, intro: "『環』は中心を残して周囲八方を反転させる。ドーナツ状の波を重ねろ。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["OOO..O", "O.O.O.", "OOOOOO", "..OO.O", ".OO..O", "..OOOO"],
+        tray: { "dot": 1, "plus": 2, "ring": 2 }
+      },
+      {
+        id: "4-2", lv: 4, intro: "『塊』は3×3すべてを反転させる強力な波。広範囲を慎重に。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: [".OO.O.", "OO.O.O", "OOO.O.", ".OOO.O", "OOOOOO", ".O.OOO"],
+        tray: { "dot": 1, "plus": 2, "corners": 1, "box": 2 }
+      },
+      {
+        id: "4-3", lv: 4, intro: "壁は波を通さない。壁の陰を計算に入れろ。",
+        start: ["......", "......", "..#...", "...#..", "......", "......"],
+        goal: [".O.O.O", "OOOO.O", ".O#.O.", "OO.#.O", "....OO", "OO.OO."],
+        tray: { "plus": 2, "ex": 2, "ring": 1, "box": 1 }
+      },
+      {
+        id: "4-4", lv: 4, intro: "環と塊、二つの広域波を噛み合わせろ。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["OOO..O", "OOO..O", "OOO.O.", "...OO.", "OOOOOO", ".O.OOO"],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "corners": 1, "ring": 1, "box": 1 }
+      },
+      {
+        id: "4-5", lv: 4, intro: "広い盤と壁。広域波で埋めつつ壁を避けろ。",
+        start: [".......", ".......", "...#...", "...#...", ".......", "......."],
+        goal: ["O.O..O.", "..OOOOO", "OOO#OOO", "..O#OO.", "OOOO.OO", ".O.OOO."],
+        tray: { "plus": 2, "ex": 1, "corners": 1, "ring": 1, "box": 1 }
+      },
+      {
+        id: "4-6", lv: 4, intro: "Level 4 の総仕上げ。壁と広域波を捌け。",
+        start: ["#......", ".......", ".......", "...#...", ".......", "......#"],
+        goal: ["#OO.O.O", "O.OO.O.", ".O....O", "...#O.O", ".O..OOO", "OO..OO#"],
+        tray: { "dot": 1, "plus": 1, "ex": 2, "corners": 1, "ring": 1, "box": 1 }
+      },
+      {
+        id: "4-7", lv: 4, intro: "壁を挟んだ両側を同時に成立させろ。",
+        start: [".......", "...#...", ".......", ".......", "...#...", "......."],
+        goal: ["OO..O.O", "O..#...", "..OO.O.", "OO.OO.O", ".O.#OOO", "O..OO.."],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "horz": 1, "corners": 1, "ring": 1, "box": 1 }
+      },
+      {
+        id: "5-1", lv: 5, intro: "『星』は距離2まで十字に届く長距離波。点で細部を仕上げろ。",
+        start: ["......", "......", "......", "......", "......", "......"],
+        goal: ["O.OO.O", "..OO..", "OOOOOO", "...OOO", "OO.O..", ".O.O.."],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "corners": 1, "star": 2 }
+      },
+      {
+        id: "5-2", lv: 5, intro: "長距離の星と広域波を、壁を避けて重ねろ。",
+        start: [".......", ".......", "...#...", "...#...", ".......", "......."],
+        goal: [".....O.", ".OO.OOO", ".O.#..O", "O..#.OO", "..OO..O", "O.OOOO."],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "corners": 1, "ring": 1, "box": 1, "star": 1 }
+      },
+      {
+        id: "5-3", lv: 5, intro: "大盤。四方の壁を縫って収束させろ。",
+        start: ["...#...", ".......", ".......", "#.....#", ".......", ".......", "...#..."],
+        goal: ["OOO#.O.", "OOO.O.O", "OOOOOO.", "#OOO.O#", ".O..O.O", "OOO...O", ".O.#OOO"],
+        tray: { "plus": 2, "ex": 1, "ring": 1, "box": 2, "star": 1 }
+      },
+      {
+        id: "5-4", lv: 5, intro: "最初から点灯した事象がある。消すか活かすか見極めろ。",
+        start: ["...#...", ".......", ".......", "#..O..#", ".......", ".......", "...#..."],
+        goal: [".OO#O..", "OO..OO.", "...OOO.", "#.OOO.#", ".OOOOOO", ".OO.O..", "..O#..O"],
+        tray: { "plus": 1, "ex": 2, "corners": 1, "box": 2, "star": 2 }
+      },
+      {
+        id: "5-5", lv: 5, intro: "壁の迷宮に残光。全てを釣り合わせろ。",
+        start: ["O..#...", ".......", ".......", "#..#..#", ".......", ".......", "...#..O"],
+        goal: ["OO.#.O.", "O....OO", ".OO..O.", "#..#.O#", ".OOO.O.", "OOO.OOO", ".OO#OOO"],
+        tray: { "plus": 4, "corners": 2, "bslash": 1, "fslash": 1, "box": 1 }
+      },
+      {
+        id: "5-6", lv: 5, intro: "長距離波と広域波の総力戦。",
+        start: ["O..#...", ".......", ".......", "#..#..#", ".......", ".......", "...#..O"],
+        goal: ["OO.#...", "OOOOO..", "OO.OOOO", "#.O#OO#", "OOOO.OO", ".OO.O.O", "...#.O."],
+        tray: { "plus": 1, "ex": 2, "corners": 1, "ring": 1, "box": 2, "star": 2 }
+      },
+      {
+        id: "5-7", lv: 5, intro: "特異点。壁・初期点灯・全波及形。一つの余計も残すな。",
+        start: ["#.....#", ".O.....", ".......", "...#...", ".......", ".....O.", "#.....#"],
+        goal: ["#O..O.#", "O.O.OO.", "OO..OO.", "OO.#.OO", ".OO..OO", ".OOOO.O", "#..OOO#"],
+        tray: { "plus": 1, "ex": 2, "ring": 2, "box": 2, "star": 4 }
+      },
+      {
+        id: "6-1", lv: 6, intro: "",
+        start: [".......", "#......", "...#...", ".......", ".......", ".......", "......."],
+        goal: [".......", "#..O...", ".OO#.OO", ".O...O.", ".....OO", ".O.OOO.", ".O.OOO."],
+        tray: { "dot": 1, "plus": 3, "corners": 2, "ring": 1, "box": 2 }
+      },
+      {
+        id: "6-2", lv: 6, intro: "",
+        start: [".......", ".......", ".......", ".......", ".......", "..O....", "......."],
+        goal: [".O.....", "...OO.O", "O...OO.", "OOOOO..", ".O..O.O", "..OOOOO", "..OO..O"],
+        tray: { "dot": 1, "ex": 2, "corners": 1, "ring": 3, "star": 2 }
+      },
+      {
+        id: "6-3", lv: 6, intro: "",
+        start: [".......", ".......", ".......", ".......", ".......", ".......", "......."],
+        goal: ["O.OOO..", "OO.O...", "O.O....", "...OO..", "..O.OO.", "OO.....", "OOOOOO."],
+        tray: { "dot": 1, "ex": 2, "vert": 1, "horz": 3, "corners": 1, "bslash": 1, "fslash": 1, "box": 1 }
+      },
+      {
+        id: "6-4", lv: 6, intro: "",
+        start: [".......", ".......", ".......", "..O....", "......#", ".......", "......."],
+        goal: ["OOOO..O", ".OO..OO", "..OO...", ".O...O.", "..O.O.#", ".O....O", "..O..OO"],
+        tray: { "plus": 2, "ex": 3, "vert": 1, "corners": 1, "bslash": 1, "box": 1, "star": 1 }
+      },
+      {
+        id: "6-5", lv: 6, intro: "",
+        start: ["..O....", ".......", ".#.....", ".......", ".......", ".......", "......."],
+        goal: ["..O....", "..OO.OO", ".#OOO.O", "..OO.OO", "O.O.OO.", "...O.OO", "O..O..O"],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "horz": 1, "tup": 1, "fslash": 1, "ring": 1, "box": 1, "star": 2 }
+      },
+      {
+        id: "6-6", lv: 6, intro: "",
+        start: [".......", ".......", "#......", ".......", "....#..", ".......", ".O.O..."],
+        goal: ["..O...O", ".OOO.O.", "#..OOOO", ".O..O.O", "....#OO", "..OOO..", ".OO.OO."],
+        tray: { "plus": 1, "ex": 2, "vert": 1, "corners": 1, "tup": 1, "fslash": 1, "ring": 1, "box": 2 }
+      },
+      {
+        id: "6-7", lv: 6, intro: "",
+        start: [".......", ".......", ".......", ".......", ".......", ".......", "......."],
+        goal: ["...OOO.", ".O.O.O.", "..OO.OO", "O..OOO.", ".OOO..O", ".OOO.OO", "......O"],
+        tray: { "dot": 1, "plus": 1, "ex": 2, "corners": 1, "tup": 1, "box": 2, "star": 3 }
+      },
+      {
+        id: "7-1", lv: 7, intro: "",
+        start: ["..#....", "......#", "....O..", "O......", ".......", ".......", "..#O..."],
+        goal: ["O.#.OO.", "OO...O#", ".OO....", "...O.OO", "....OO.", "..OO.OO", "..#..OO"],
+        tray: { "plus": 3, "ex": 1, "corners": 1, "bslash": 2, "box": 1, "star": 2 }
+      },
+      {
+        id: "7-2", lv: 7, intro: "",
+        start: [".......", ".......", "#......", ".......", ".....#O", ".......", "......."],
+        goal: ["....O..", ".O...OO", "#O.OO..", "....O..", "..O.O#O", "O.OOOOO", "OOOO..O"],
+        tray: { "dot": 1, "plus": 2, "ex": 1, "horz": 1, "corners": 1, "ring": 3, "star": 2 }
+      },
+      {
+        id: "7-3", lv: 7, intro: "",
+        start: ["....O..", ".......", ".O.....", ".......", ".......", ".......", ".#....."],
+        goal: ["OOO..OO", "OOO.O..", "..O.OO.", ".OO.O.O", "O..OOO.", "OOO.O..", "O#O.O.O"],
+        tray: { "dot": 1, "plus": 1, "vert": 1, "horz": 2, "corners": 1, "tup": 1, "fslash": 1, "ring": 1, "star": 2 }
+      },
+      {
+        id: "7-4", lv: 7, intro: "",
+        start: [".......", ".......", "......O", ".......", ".#.O...", ".......", "...O..."],
+        goal: ["...OOOO", ".....OO", ".OOOO..", "O.OOO..", "O#...OO", "OO..O..", "O.O...."],
+        tray: { "plus": 1, "ex": 2, "tup": 1, "bslash": 1, "fslash": 2, "ring": 1, "box": 1, "star": 2 }
+      },
+      {
+        id: "7-5", lv: 7, intro: "",
+        start: ["....O..", ".......", ".......", ".......", ".......", ".....#.", "......."],
+        goal: ["OOOO..O", ".OO.OOO", ".O..OO.", "...O..O", "......O", "...O.#O", ".....OO"],
+        tray: { "plus": 2, "ex": 1, "corners": 1, "tup": 1, "bslash": 1, "ring": 2, "box": 1, "star": 2 }
+      },
+      {
+        id: "7-6", lv: 7, intro: "",
+        start: [".#....O", ".......", ".......", ".......", "O....O.", ".......", "......."],
+        goal: [".#....O", ".OOO.OO", ".O.OO..", "...OOOO", "O..OOOO", "...OO.O", "....OOO"],
+        tray: { "ex": 1, "corners": 2, "tup": 1, "bslash": 1, "fslash": 1, "ring": 3, "box": 1, "star": 1 }
+      },
+      {
+        id: "7-7", lv: 7, intro: "",
+        start: [".......", "O......", ".......", "...O...", ".......", ".#...O.", "......."],
+        goal: ["O.OO...", "O.OO...", "..O.OOO", "...OOOO", "OO..OOO", "O#...O.", "OO....."],
+        tray: { "tup": 1, "bslash": 1, "fslash": 2, "ring": 1, "box": 2, "star": 1 }
+      },
+      {
+        id: "8-1", lv: 8, intro: "",
+        start: ["#.#....", ".......", ".......", ".....O.", "#.#....", "..#....", "......O"],
+        goal: ["#O#OO.O", ".OOOO.O", "O.OO..O", "..OO.OO", "#.#O...", "..#O...", "..O...O"],
+        tray: { "ex": 4, "vert": 1, "horz": 1, "corners": 2, "star": 2 }
+      },
+      {
+        id: "8-2", lv: 8, intro: "",
+        start: ["..#....", "...#...", ".......", "..#..##", "#O.....", ".......", "......."],
+        goal: [".O#..O.", "O..#O..", "....O.O", ".O#OO##", "#..O.OO", "..OO.O.", "......O"],
+        tray: { "dot": 3, "plus": 3, "ex": 1, "vert": 2, "corners": 1, "tup": 1, "ring": 1 }
+      },
+      {
+        id: "8-3", lv: 8, intro: "",
+        start: [".....#.", "...##..", ".......", ".......", "..#OO..", ".#.....", ".O....."],
+        goal: [".O...#.", "OOO##OO", ".O.O...", ".OOO...", "..#.OOO", "O#..O..", ".O....."],
+        tray: { "dot": 2, "plus": 1, "vert": 1, "corners": 2, "ring": 1, "star": 2 }
+      },
+      {
+        id: "8-4", lv: 8, intro: "",
+        start: ["......#", "O......", ".......", ".......", "....#..", ".##....", "##....."],
+        goal: [".O.O.O#", "..OOO..", "....OO.", "...O..O", "..OO#..", ".##O.OO", "##...OO"],
+        tray: { "dot": 2, "plus": 1, "ex": 3, "tup": 1, "fslash": 1, "ring": 2, "box": 1, "star": 1 }
+      },
+      {
+        id: "8-5", lv: 8, intro: "",
+        start: ["...O...", "...O...", "..#..#.", "..#....", ".......", ".....#.", "O......"],
+        goal: [".OO....", ".O.OOO.", "OO#.O#.", "OO#OO.O", "O..OOO.", ".OO.O#O", "O.O...O"],
+        tray: { "dot": 1, "ex": 1, "corners": 2, "tup": 1, "ring": 4, "box": 2, "star": 1 }
+      },
+      {
+        id: "8-6", lv: 8, intro: "",
+        start: [".......", "......O", ".....O#", ".......", "#...O..", "..##...", ".#....."],
+        goal: ["O.OO...", ".OO..O.", ".O..O.#", "...O..O", "#.O.O..", "..##.O.", ".#..O.."],
+        tray: { "dot": 1, "plus": 2, "ex": 1, "horz": 2, "bslash": 1, "box": 1, "star": 2 }
+      },
+      {
+        id: "8-7", lv: 8, intro: "",
+        start: ["#......", "....#..", "#......", ".O.....", "...#..#", ".......", "O..O..."],
+        goal: ["#O.OOO.", ".OOO#..", "#..OO..", "OOO..OO", ".O.#.O#", "O.O.OOO", "O..OOOO"],
+        tray: { "plus": 3, "ex": 1, "vert": 1, "bslash": 1, "ring": 1, "box": 2, "star": 3 }
+      },
+      {
+        id: "9-1", lv: 9, intro: "",
+        start: ["#.O....", "..O.O..", ".......", ".#.....", ".....OO", ".#.....", "......."],
+        goal: ["#OOO.O.", ".OO...O", "OO.O..O", "O#.OO.O", "OO.....", "O#.....", "..O...."],
+        tray: { "dot": 3, "ex": 2, "vert": 1, "horz": 2, "ring": 1, "box": 2 }
+      },
+      {
+        id: "9-2", lv: 9, intro: "",
+        start: [".......", "..O....", ".....O.", ".O.....", "O.....#", "..O.O..", "......#"],
+        goal: ["O..O...", "..OOOO.", "O..O.OO", "OO..OOO", "...O.O#", "..O.O.O", "O...OO#"],
+        tray: { "plus": 2, "ex": 2, "horz": 1, "corners": 1, "tup": 1, "bslash": 1, "ring": 4 }
+      },
+      {
+        id: "9-3", lv: 9, intro: "",
+        start: [".......", ".....OO", ".......", ".......", "..O##..", "...#...", "OO.O..."],
+        goal: ["OOO..O.", ".O.OO.O", ".O.O...", ".......", "..O##..", "OOO#...", "..O...."],
+        tray: { "ex": 2, "vert": 1, "corners": 3, "tup": 2, "bslash": 2, "fslash": 1, "box": 1, "star": 1 }
+      },
+      {
+        id: "9-4", lv: 9, intro: "",
+        start: ["...#...", "#....O.", ".......", ".......", ".OO.#..", ".....OO", "......."],
+        goal: ["...#O..", "#..OO..", "..OOOOO", "..O.OO.", ".OO.#..", "O.OOO.O", "O....O."],
+        tray: { "plus": 1, "corners": 4, "bslash": 1, "ring": 1, "box": 3, "star": 2 }
+      },
+      {
+        id: "9-5", lv: 9, intro: "",
+        start: ["....O#.", ".......", ".#.....", ".......", ".......", ".....OO", "......O"],
+        goal: ["O.O.O#.", "OOOOOO.", ".#.OO..", "....O..", ".OOO...", "OOO...O", ".OOOOOO"],
+        tray: { "dot": 2, "horz": 2, "corners": 3, "ring": 2, "box": 3, "star": 2 }
+      },
+      {
+        id: "9-6", lv: 9, intro: "",
+        start: ["..#....", "O#...O.", "......#", "O...O..", ".......", "......O", ".....#."],
+        goal: [".O#.O..", "O#..OO.", "OOO..O#", ".......", "OO..OOO", "OO...OO", "O....#O"],
+        tray: { "plus": 4, "ex": 2, "vert": 1, "tup": 1, "fslash": 1, "ring": 1, "box": 1, "star": 2 }
+      },
+      {
+        id: "9-7", lv: 9, intro: "",
+        start: ["...O....", ".#O..O..", "........", "#...O...", "....#...", "..#..O..", "........", "O.....O."],
+        goal: ["O....OOO", ".#O..OO.", "OO.O.OOO", "#O.OOO.O", ".O..#...", ".O#..OO.", ".OO.OO.O", "O....OO."],
+        tray: { "plus": 3, "vert": 2, "horz": 1, "corners": 5, "tup": 1, "bslash": 1, "ring": 1 }
+      },
+      {
+        id: "10-1", lv: 10, intro: "",
+        start: [".#.....O", "...#....", "........", "........", "...O....", "........", ".....#..", "..O.O..."],
+        goal: ["O#...O.O", "OO.#..O.", "O.OOO...", "OOOOOOOO", "....OOOO", "..OO.O..", ".O...#..", "O...O..."],
+        tray: { "dot": 1, "plus": 1, "ex": 1, "horz": 1, "corners": 1, "tup": 1, "bslash": 2, "fslash": 1, "ring": 2, "box": 1 }
+      },
+      {
+        id: "10-2", lv: 10, intro: "",
+        start: ["........", "....##..", ".....O..", "........", "..O.....", ".O.#O...", "O.....O.", "..#....."],
+        goal: ["O.OO.O.O", "OO..##.O", "OOO.OO.O", ".O....O.", "OOO.OO.O", "O..#OOO.", "OO.OOOOO", "OO#..OOO"],
+        tray: { "plus": 2, "ex": 2, "vert": 1, "horz": 1, "corners": 1, "tup": 1, "ring": 2, "box": 2 }
+      },
+      {
+        id: "10-3", lv: 10, intro: "",
+        start: [".O......", "........", ".......#", "..#.#...", "....O...", "........", ".....O..", "........"],
+        goal: ["O....O..", "OO..OOOO", ".O...O.#", "OO#O#O..", "...O....", ".....O..", "OOO.O...", ".O.....O"],
+        tray: { "plus": 1, "ex": 3, "vert": 1, "corners": 2, "tup": 1, "bslash": 2, "ring": 1, "star": 1 }
+      },
+      {
+        id: "10-4", lv: 10, intro: "",
+        start: ["........", "........", "..O#.#..", "......#.", "...O....", ".O......", "..O.....", ".....#.."],
+        goal: [".....OOO", ".O.OOO.O", "..O#.#O.", "OOOO..#O", "OOOO....", ".O.O.OOO", "OOOOO.OO", "O..O.#OO"],
+        tray: { "dot": 2, "plus": 1, "ex": 2, "vert": 1, "horz": 1, "corners": 1, "bslash": 2, "fslash": 1, "box": 1, "star": 2 }
+      },
+      {
+        id: "10-5", lv: 10, intro: "",
+        start: [".....#..", ".O.O....", "........", "........", "...#....", "...O...O", "......O.", "..#...#."],
+        goal: ["O..O.#..", ".OO.....", "O.O.OO..", "..OOOOO.", "O..#.O.O", "..OOOOO.", ".....O..", "..#...#O"],
+        tray: { "dot": 1, "corners": 2, "bslash": 2, "ring": 2, "box": 3, "star": 3 }
+      },
+      {
+        id: "10-6", lv: 10, intro: "",
+        start: ["...#....", ".O......", "......#.", "....##..", "O...#...", "........", "O.......", "........"],
+        goal: ["OOO#..O.", "OOO.O..O", "O.OOOO#O", "..O.##OO", "OO..#..O", "OO.OO.OO", "OOOOO..O", "O..OO..."],
+        tray: { "vert": 2, "corners": 1, "tup": 1, "bslash": 2, "ring": 6, "star": 3 }
+      },
+      {
+        id: "10-7", lv: 10, intro: "",
+        start: ["...#....", "........", "........", "......#O", "...O.O..", "...#....", "........", ".O......"],
+        goal: [".O.#OOOO", "O...OOOO", "..O..OOO", "O.....#O", "...O.OOO", "OO.#.OO.", "O.OOOO.O", "OO.O.OOO"],
+        tray: { "vert": 1, "corners": 1, "tup": 1, "bslash": 1, "fslash": 2, "ring": 2, "box": 3, "star": 3 }
+      },
+    ];
+    const LEVEL_INFO = [
+      { lv: 1, title: "GENESIS", add: "十字・横・縦" },
+      { lv: 2, title: "CROSSFIRE", add: "斜め・四隅" },
+      { lv: 3, title: "FLUX", add: "T字・斜線・点" },
+      { lv: 4, title: "DELUGE", add: "環・塊・壁" },
+      { lv: 5, title: "APEX", add: "星・初期点灯" },
+      { lv: 6, title: "SURGE", add: "大型盤・全波及形" },
+      { lv: 7, title: "VORTEX", add: "密集と打ち消し" },
+      { lv: 8, title: "TEMPEST", add: "壁の要塞" },
+      { lv: 9, title: "ZENITH", add: "初期点灯の海" },
+      { lv: 10, title: "OMEGA", add: "総力戦" },
+    ];
+
+    /* ---------- state ---------- */
+    let li = 0, rows, cols, state, goal, wall, tray, selected = null, solved = false;
+    let unlocked = 0, moves = 0, history = [], animating = false;
+    // フリーモード（全ピース無制限・手数目標は自分で設定・ソフト目標）
+    let freeMode = false, freeTarget = 0, freeOptimal = 0;
+    let freeCleared = new Set(), freeResume = 0;   // フリーモードの進行（クリア済みパズルの集合／最後に開いたパズル）
+    const optimalOf = (i) => Object.values(STAGES[i].tray).reduce((a, b) => a + b, 0); // メインの最短手数
+    const allShapesInf = () => { const t = {}; TRAY_ORDER.forEach(s => t[s] = Infinity); return t; };
+
+    /* ---------- settings / progress (out-game) ---------- */
+    const settings = {
+      sound: true, music: true, video: true, vibe: true,
+      track: 'menu',   // BGMの選択（menu=INVALIO / off=無音 / 各曲id）。全画面で継続再生。
+      lastTrack: 'menu',   // 音楽ONに戻したとき復帰する曲
+      cb: false,   // 色覚サポート
+      reduceMotion: !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)
+    };
+    let resumeIndex = 0;      // 「はじめる」で再開するパズル
+    function loadPrefs() {
+      try { const s = JSON.parse(localStorage.getItem('inv_settings')); if (s) Object.assign(settings, s); } catch (e) { }
+      try { const p = JSON.parse(localStorage.getItem('inv_progress')); if (p) { unlocked = Math.min(p.unlocked || 0, STAGES.length); resumeIndex = Math.min(p.last || 0, STAGES.length - 1); } } catch (e) { }
+      try {
+        const f = JSON.parse(localStorage.getItem('inv_free'));
+        if (f) {
+          freeResume = Math.min(f.last || 0, STAGES.length - 1);
+          if (Array.isArray(f.cleared)) freeCleared = new Set(f.cleared.filter(i => i >= 0 && i < STAGES.length));
+          else if (f.unlocked) { freeCleared = new Set(); for (let i = 0; i < Math.min(f.unlocked, STAGES.length); i++) freeCleared.add(i); }  // 旧フォーマット移行
+        }
+      } catch (e) { }
+      // 旧「ワールド連動(auto)」や未知の値は INVALIO(menu) に移行
+      if (settings.track !== 'off' && !TRACKS.some(t => t.id === settings.track)) settings.track = 'menu';
+      // 音楽スイッチ(music)とBGM選択(track)の整合をとる：music=OFF は track=off と同一
+      if (settings.music === false) settings.track = 'off';
+      settings.music = settings.track !== 'off';
+      if (settings.track !== 'off') settings.lastTrack = settings.track;
+      if (!settings.lastTrack || settings.lastTrack === 'off') settings.lastTrack = 'menu';
+      muted = !settings.sound;
+      applyA11y();
+    }
+    function applyA11y() {
+      document.body.classList.toggle('cb', settings.cb);
+      document.body.classList.toggle('reduce-motion', settings.reduceMotion);
+    }
+    // 確認ダイアログ
+    function confirmAction(msg, onYes) {
+      document.getElementById('cfMsg').innerHTML = msg;
+      const dlg = document.getElementById('confirmdlg'), yes = document.getElementById('cfYes'), no = document.getElementById('cfNo');
+      const close = () => { dlg.classList.remove('show'); yes.onclick = null; no.onclick = null; };
+      yes.onclick = () => { close(); onYes(); };
+      no.onclick = close;
+      dlg.classList.add('show');
+    }
+    function savePrefs() { try { localStorage.setItem('inv_settings', JSON.stringify(settings)); } catch (e) { } }
+    function saveProgress() { try { localStorage.setItem('inv_progress', JSON.stringify({ unlocked, last: li })); } catch (e) { } }
+    function saveFreeProgress() { try { localStorage.setItem('inv_free', JSON.stringify({ cleared: [...freeCleared], last: freeResume })); } catch (e) { } }
+
+    const boardEl = document.getElementById('board');
+    const trayEl = document.getElementById('tray');
+    const introEl = document.getElementById('intro');
+    const stageNameEl = document.getElementById('stageName');
+    const stagebarEl = document.getElementById('stagebar');
+    const levelbarEl = document.getElementById('levelbar');
+    const PER_LEVEL = 7;
+    const overlay = document.getElementById('overlay');
+    const remEl = document.getElementById('rem');
+    const movesEl = document.getElementById('moves');
+
+    /* ---------- audio ---------- */
+    let audioCtx = null, muted = false;
+    function ac() { if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } } return audioCtx; }
+    function beep(f, dur = .08, type = 'sine', vol = .12, delay = 0) {
+      if (muted) return; const c = ac(); if (!c) return;
+      const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.value = f; o.connect(g); g.connect(c.destination);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+      o.start(t); o.stop(t + dur + .02);
+    }
+    const sfx = {
+      place: () => { beep(300, .05, 'sawtooth', .08); beep(520, .09, 'triangle', .1, .02); },
+      flip: (hi) => beep(hi ? 680 : 440, .05, 'sine', .05),
+      undo: () => beep(220, .08, 'square', .07),
+      bad: () => beep(160, .12, 'sawtooth', .08),
+      win: () => [523, 659, 784, 1046].forEach((f, i) => beep(f, .5, 'sine', .12, i * .09)),
+      // ハッピーなレベルクリアのファンファーレ
+      levelup: () => {
+        [523, 659, 784, 1046, 1319].forEach((f, i) => beep(f, .5, 'triangle', .13, i * .1));
+        beep(1568, .6, 'sine', .12, .55);
+        beep(1046, .6, 'triangle', .08, .55);
+      },
+      // 全クリア：パーフェクトおめでとう！の華やかなファンファーレ
+      perfect: () => {
+        // 上昇するきらめきラン
+        [523, 587, 659, 784, 880, 1046, 1175, 1319, 1568].forEach((f, i) => beep(f, .26, 'triangle', .12, i * .085));
+        // 大団円：伸びる長三和音＋オクターブ上（サイン）
+        const t = 0.82;
+        [523, 659, 784, 1046].forEach(f => beep(f, 1.6, 'sine', .085, t));
+        [1046, 1319, 1568, 2093].forEach((f, i) => beep(f, 1.5, 'triangle', .09, t + i * .015));
+        // きらきらの余韻
+        [2093, 2637, 3136].forEach((f, i) => beep(f, .5, 'sine', .05, t + .5 + i * .12));
+      },
+    };
+
+    /* ---------- BGM（MP3再生・クロスフェード・ループ） ----------
+       曲ファイルは bgm/ フォルダに配置：
+         bgm/INVALIO.mp3 … タイトル／各メニュー（title / mainmenu / gamemenu / settings / howto）
+         bgm/space.mp3  bgm/sky.mp3  bgm/forest.mp3  bgm/sea.mp3  bgm/desert.mp3 … 各WORLDのプレイ中
+       ※ ファイルが無いWORLDは無音（エラーにはなりません）。
+       ※ THEMES の各WORLDの bgm: で個別にファイル名を変更できます。 */
+    const MUSIC = {
+      MENU_SRC: 'bgm/INVALIO.mp3',   // タイトル／メニュー共通曲
+      VOL: 0.55,                     // 最大音量（0〜1）
+      FADE: 800,                     // クロスフェード時間(ms)
+      curSrc: null, cur: null, fadeTimer: null, playing: false, cache: {},
+      mode: 'single', playlist: null, plIndex: 0, plKey: null,   // 'all'用プレイリスト状態
+      _make(src) {
+        let a = this.cache[src];
+        if (!a) { a = new Audio(src); a.loop = true; a.preload = 'auto'; a.volume = 0; this.cache[src] = a; }
+        return a;
+      },
+      // src の曲へクロスフェードで切り替える（同じ曲なら何もしない）
+      play(src) {
+        this.mode = 'single'; this.playlist = null; this.plKey = null;
+        if (!src) { this.stop(); return; }
+        if (this.playing && this.curSrc === src) return;
+        this.curSrc = src; this.playing = true;
+        const next = this._make(src);
+        next.loop = true; next.onended = null;
+        const prev = this.cur;
+        this.cur = next;
+        try { next.currentTime = next.currentTime || 0; const p = next.play(); if (p && p.catch) p.catch(() => { }); } catch (e) { }
+        this._fade(prev, next);
+      },
+      // 複数曲を順番に無限ループ再生（曲が終わるたび次へ）
+      playPlaylist(list) {
+        const key = list.join('|');
+        if (this.mode === 'playlist' && this.plKey === key && this.playing) return; // 同じプレイリスト継続中なら何もしない
+        clearInterval(this.fadeTimer); this.fadeTimer = null;
+        this.mode = 'playlist'; this.playlist = list.slice(); this.plKey = key; this.plIndex = 0; this.playing = true;
+        this._playPlItem();
+      },
+      _playPlItem() {
+        if (this.mode !== 'playlist' || !this.playlist || !this.playlist.length) return;
+        const src = this.playlist[this.plIndex % this.playlist.length];
+        this.curSrc = src;
+        const next = this._make(src);
+        next.loop = false;
+        next.onended = () => {
+          if (this.mode !== 'playlist' || !this.playing) return;
+          this.plIndex = (this.plIndex + 1) % this.playlist.length;
+          this._playPlItem();
+        };
+        const prev = this.cur;
+        this.cur = next;
+        try { next.currentTime = 0; const p = next.play(); if (p && p.catch) p.catch(() => { }); } catch (e) { }
+        this._fade(prev, next);
+      },
+      _fade(prev, next) {
+        clearInterval(this.fadeTimer);
+        const start = performance.now(), dur = this.FADE, target = this.VOL;
+        const fromPrev = prev ? prev.volume : 0, fromNext = next ? next.volume : 0;
+        this.fadeTimer = setInterval(() => {
+          const k = Math.min(1, (performance.now() - start) / dur);
+          if (next) next.volume = fromNext + (target - fromNext) * k;
+          if (prev && prev !== next) prev.volume = fromPrev * (1 - k);
+          if (k >= 1) {
+            clearInterval(this.fadeTimer); this.fadeTimer = null;
+            if (prev && prev !== next) { try { prev.pause(); prev.currentTime = 0; } catch (e) { } }
+          }
+        }, 40);
+      },
+      stop() {
+        this.mode = 'single'; this.playlist = null; this.plKey = null;
+        if (this.cur) this.cur.onended = null;
+        if (!this.playing && !this.cur) return;
+        this.playing = false; this.curSrc = null;
+        clearInterval(this.fadeTimer);
+        const prev = this.cur; this.cur = null;
+        if (!prev) return;
+        const start = performance.now(), dur = this.FADE, from = prev.volume;
+        this.fadeTimer = setInterval(() => {
+          const k = Math.min(1, (performance.now() - start) / dur);
+          prev.volume = from * (1 - k);
+          if (k >= 1) { clearInterval(this.fadeTimer); this.fadeTimer = null; try { prev.pause(); prev.currentTime = 0; } catch (e) { } }
+        }, 40);
+      },
+      // ユーザー操作後にAudioContextと同様、再生をキック（自動再生制限対策）
+      resume() { if (this.cur && this.playing) { const p = this.cur.play(); if (p && p.catch) p.catch(() => { }); } },
+    };
+    /* プレイヤーが選べるBGM一覧。
+       off = 無音 / それ以外 = 固定曲（メニュー・プレイ中を問わず全画面で継続再生）。
+       WORLD各曲は THEMES の tagline（曲名）・bgm から自動生成。opt = ドロップダウン表示名。 */
+    const TRACKS = [
+      { id: 'menu', label: 'INVALIO', opt: 'INVALIO', src: MUSIC.MENU_SRC },
+      ...THEMES.map(t => ({ id: t.id, label: t.tagline, opt: t.tagline, src: t.bgm || null })),
+      { id: 'all', label: 'ALL', opt: 'ALL（全曲ループ）', src: null },
+      { id: 'off', label: 'OFF', opt: 'OFF（無音）', src: null }
+    ];
+    // ALL用プレイリスト：INVALIO〜Amber Horizon（実ファイルのある曲）を並び順どおりに
+    const ALL_PLAYLIST = TRACKS.filter(t => t.src).map(t => t.src);
+    // 選択中トラックの再生ソースを返す。固定曲は画面に関係なく常にその曲。off/未設定は null=無音。
+    function trackSrc() {
+      const id = settings.track || 'menu';
+      if (id === 'off') return null;
+      const sel = TRACKS.find(x => x.id === id);
+      return sel ? (sel.src || null) : MUSIC.MENU_SRC;
+    }
+    // 選んだ曲を全画面で継続再生（クリック等でINVALIOに戻さない）。music トグルOFFで停止。
+    function updateMusic() {
+      if (!settings.music) { MUSIC.stop(); return; }
+      if ((settings.track || 'menu') === 'all') { MUSIC.playPlaylist(ALL_PLAYLIST); return; }
+      MUSIC.play(trackSrc());
+    }
+
+    /* ---------- load ---------- */
+    function parseMap(map) { return map.map(row => row.split('')); }
+    // forceReset=true（やり直す）なら、クリア済みでも必ず初期状態から
+    function loadLevel(i, forceReset = false) {
+      li = i; const L = STAGES[i];
+      const sm = parseMap(L.start), gm = parseMap(L.goal);
+      rows = sm.length; cols = sm[0].length;
+      state = []; goal = []; wall = [];
+      for (let r = 0; r < rows; r++) {
+        state[r] = []; goal[r] = []; wall[r] = [];
+        for (let c = 0; c < cols; c++) {
+          wall[r][c] = sm[r][c] === '#';
+          state[r][c] = sm[r][c] === 'O' ? 1 : 0;
+          goal[r][c] = gm[r][c] === 'O' ? 1 : 0;
+        }
+      }
+      selected = null; moves = 0; history = []; animating = false;
+      // クリア済みパズルに戻ったら完成状態（＝目標の点灯）で復元。やり直す時は復元しない。
+      const restoreSolved = !forceReset && cleared(i);
+      if (restoreSolved) {
+        for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) if (!wall[r][c]) state[r][c] = goal[r][c];
+        solved = true;
+      } else {
+        solved = false;
+      }
+      if (freeMode) {
+        freeOptimal = optimalOf(i);          // メインの最短手数
+        freeTarget = Math.max(freeTarget, freeOptimal); // 目標は最短以上（設定を引き継ぐ）
+      }
+      // 復元時はピース消費済みとして空トレイ（やり直すと通常トレイに戻る）
+      tray = restoreSolved ? {} : (freeMode ? allShapesInf() : Object.assign({}, L.tray));
+      buildBoard(); renderTray(); autoSelect(); update(); renderNav(); fitBoard();
+      renderFreebar();
+      if (!freeMode) { resumeIndex = i; saveProgress(); }   // メイン進行を保存
+      else { freeResume = i; saveFreeProgress(); }   // フリーは最後に開いたパズルを保存（クリア数は playFreeWin で加算）
+    }
+    function renderFreebar() {
+      const fb = document.getElementById('freebar');
+      fb.style.display = freeMode ? 'flex' : 'none';
+      document.getElementById('movesWrap').style.display = freeMode ? '' : '';
+      if (!freeMode) return;
+      document.getElementById('fbTarget').textContent = freeTarget + ' 手';
+      document.getElementById('fbOpt').textContent = freeOptimal + ' 手';
+      document.getElementById('fbMinus').disabled = freeTarget <= freeOptimal;
+    }
+
+    /* ---------- board dom ---------- */
+    let cellEls = [];
+    function buildBoard() {
+      boardEl.innerHTML = ''; boardEl.style.gridTemplateColumns = `repeat(${cols},var(--cell))`;
+      cellEls = [];
+      for (let r = 0; r < rows; r++) {
+        cellEls[r] = [];
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div'); cell.className = 'cell';
+          cell.innerHTML = '<div class="ring"></div><div class="node"></div>';
+          cell.addEventListener('click', () => onPlace(r, c));
+          cell.addEventListener('contextmenu', (e) => { e.preventDefault(); undo(); });
+          cell.addEventListener('mouseenter', () => preview(r, c, true));
+          cell.addEventListener('mouseleave', () => preview(r, c, false));
+          boardEl.appendChild(cell); cellEls[r][c] = cell;
+        }
+      }
+    }
+    function fitBoard() {
+      const wrapW = Math.min(document.getElementById('app').clientWidth - 16, 700);
+      const maxW = (wrapW - 24) / cols, maxH = (Math.min(window.innerHeight * 0.6, 520)) / rows;
+      let s = Math.floor(Math.min(maxW, maxH, 86)); s = Math.max(s, 34);
+      document.documentElement.style.setProperty('--cell', s + 'px');
+    }
+    window.addEventListener('resize', fitBoard);
+
+    /* ---------- interaction ---------- */
+    function snapshot() { history.push(JSON.stringify({ state, tray, moves })); if (history.length > 80) history.shift(); }
+    function affected(r, c) {
+      const out = [];
+      if (!selected) return out;
+      for (const [dr, dc] of SHAPES[selected]) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+        if (wall[nr][nc]) continue;
+        out.push([nr, nc]);
+      }
+      return out;
+    }
+    let pvList = [];   // 現在プレビュー中のセル（毎回のquerySelectorAllを避けて軽量化）
+    function clearPreview() {
+      for (const el of pvList) el.classList.remove('pv', 'pvc');
+      pvList.length = 0;
+    }
+    function preview(r, c, on) {
+      if (animating || solved) return;
+      if (wall[r][c]) return;
+      clearPreview();
+      if (on && selected && (freeMode || tray[selected] > 0)) {
+        for (const [nr, nc] of affected(r, c)) { const el = cellEls[nr][nc]; el.classList.add('pv'); pvList.push(el); }
+        const cc = cellEls[r][c]; cc.classList.add('pvc'); pvList.push(cc);
+      }
+    }
+    function onPlace(r, c) {
+      if (animating || solved) return;
+      if (wall[r][c]) { toast('壁には置けません'); return; }
+      if (!selected) {
+        // ピースを使い切っている場合は「選んで」ではなく状況に合った案内を出す
+        if (!freeMode && !Object.values(tray).some(v => v > 0)) toast('ピースを使い切りました。「取り消し」か「やり直す」でやり直せます');
+        else toast('先にピースを選んでください');
+        return;
+      }
+      if (!freeMode && !(tray[selected] > 0)) { toast('残りピースがありません'); return; }
+      snapshot();
+      const cells = affected(r, c);
+      if (!freeMode) tray[selected]--;
+      moves++;
+      sfx.place();
+      if (settings.vibe && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { } }
+      // visuals: cause glyph + wave
+      const host = cellEls[r][c];
+      const g = document.createElement('div'); g.className = 'causeglyph'; g.textContent = curGlyph; host.appendChild(g);
+      const w = document.createElement('div'); w.className = 'wave'; host.appendChild(w);
+      setTimeout(() => { g.remove(); w.remove(); }, 650);
+      // toggle with slight stagger
+      cells.forEach(([nr, nc], idx) => {
+        setTimeout(() => {
+          state[nr][nc] ^= 1;
+          cellEls[nr][nc].classList.remove('flip'); void cellEls[nr][nc].offsetWidth;
+          cellEls[nr][nc].classList.add('flip');
+          sfx.flip(state[nr][nc] === 1);
+          update(false);
+        }, 60 + idx * 45);
+      });
+      if (tray[selected] === 0) setTimeout(autoSelect, 50);
+      setTimeout(() => { renderTray(); update(); checkWin(); }, 60 + cells.length * 45 + 60);
+    }
+    function undo() {
+      if (animating || solved) return;
+      if (!history.length) { toast('これ以上戻せません'); return; }
+      const s = JSON.parse(history.pop());
+      state = s.state; tray = s.tray; moves = s.moves;
+      if (freeMode) tray = allShapesInf();   // JSONでInfinityが消えるためフリーは復元
+      sfx.undo();
+      if (!freeMode && selected && !(tray[selected] > 0)) autoSelect();
+      renderTray(); update();
+    }
+
+    /* ---------- tray ---------- */
+    function autoSelect() {
+      if (freeMode) { selected = TRAY_ORDER[0]; renderTray(); return; }
+      selected = null; for (const k in tray) { if (tray[k] > 0) { selected = k; break; } } renderTray();
+    }
+    function miniHTML(shape) {
+      const set = new Set(SHAPES[shape].map(([r, c]) => r + ',' + c));
+      let R = 1; SHAPES[shape].forEach(([r, c]) => { R = Math.max(R, Math.abs(r), Math.abs(c)); });
+      const n = 2 * R + 1, px = Math.max(4, Math.round(20 / n));
+      let s = `<div class="mini" style="grid-template-columns:repeat(${n},${px}px);grid-template-rows:repeat(${n},${px}px);">`;
+      for (let r = -R; r <= R; r++)for (let c = -R; c <= R; c++) {
+        const on = set.has(r + ',' + c); const ctr = (r === 0 && c === 0);
+        s += `<i class="${on ? 'on' : ''} ${ctr ? 'ctr' : ''}" style="width:${px}px;height:${px}px;"></i>`;
+      }
+      return s + `</div>`;
+    }
+    function renderTray() {
+      trayEl.innerHTML = '';
+      TRAY_ORDER.forEach(shape => {
+        if (!freeMode && !(shape in STAGES[li].tray)) return;   // メインは指定ピースのみ / フリーは全12種
+        const count = freeMode ? Infinity : (tray[shape] || 0);
+        const div = document.createElement('div');
+        div.className = 'piece' + (count === 0 ? ' empty' : '') + (selected === shape ? ' sel' : '');
+        const cnt = count === Infinity ? '∞' : count;
+        div.innerHTML = `${miniHTML(shape)}<div class="plabel">${PIECE_LABEL[shape]}</div><div class="pcount">×<b>${cnt}</b></div>`;
+        div.addEventListener('click', () => { if (count > 0) { selected = shape; renderTray(); } });
+        trayEl.appendChild(div);
+      });
+    }
+
+    /* ---------- render / status ---------- */
+    function update(clearPv = true) {
+      let rem = 0;
+      for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) {
+        const cell = cellEls[r][c];
+        cell.classList.remove('need', 'good', 'bad', 'placeable', 'wall');
+        if (clearPv) cell.classList.remove('pv', 'pvc');
+        if (wall[r][c]) { cell.classList.add('wall'); continue; }
+        cell.classList.add('placeable');
+        const s = state[r][c], g = goal[r][c];
+        if (s === 1 && g === 1) cell.classList.add('good');
+        else if (s === 0 && g === 1) { cell.classList.add('need'); rem++; }
+        else if (s === 1 && g === 0) { cell.classList.add('bad'); rem++; }
+      }
+      remEl.innerHTML = curStatus + ': <b>' + rem + '</b>';
+      remEl.classList.toggle('zero', rem === 0);
+      movesEl.textContent = moves;
+      document.getElementById('movesWrap').classList.toggle('over', freeMode && moves > freeTarget);
+      document.getElementById('undoBtn').disabled = history.length === 0 || solved;
+      return rem;
+    }
+    function checkWin() {
+      const rem = update();
+      if (rem === 0 && !solved) { solved = true; if (freeMode) playFreeWin(); else playWin(); }
+    }
+    // フリーモードのクリア（ソフト目標：超えても完成扱い）
+    function playFreeWin() {
+      animating = true;
+      boardEl.classList.add('win');
+      const cells = [];
+      for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) if (!wall[r][c] && goal[r][c] === 1) cells.push([r, c, r + c]);
+      cells.sort((a, b) => a[2] - b[2]);
+      cells.forEach(([r, c], i) => setTimeout(() => { const el = cellEls[r][c]; el.classList.add('flip'); void el.offsetWidth; }, i * 40));
+      const met = moves <= freeTarget, best = moves <= freeOptimal;
+      if (best) sfx.levelup(); else sfx.win();
+      setTimeout(() => {
+        boardEl.classList.remove('win'); animating = false;
+        // クリアしたパズルをフリー進行に記録（メインと同様に数字を点灯）
+        freeCleared.add(li);
+        saveFreeProgress();
+        renderNav();
+        document.getElementById('frTitle').textContent = best ? '最短クリア！' : (met ? '目標達成！' : '完成！');
+        document.getElementById('frMsg').innerHTML =
+          `手数 <b style="color:var(--good)">${moves}</b> ／ 目標 ${freeTarget} ／ 最短 ${freeOptimal}` +
+          (best ? '<br><b style="color:var(--accent)">メインの最短に並んだ！</b>' : (met ? '<br>目標クリア！さらに短くできるかも。' : '<br>目標は超えたけど完成！'));
+        document.getElementById('freeresult').classList.add('show');
+      }, 700 + cells.length * 40);
+    }
+
+    /* ---------- win ---------- */
+    function playWin() {
+      animating = true;
+      boardEl.classList.add('win'); sfx.win();
+      // sweep good pulse
+      const cells = [];
+      for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) if (!wall[r][c] && goal[r][c] === 1) cells.push([r, c, r + c]);
+      cells.sort((a, b) => a[2] - b[2]);
+      cells.forEach(([r, c, d], i) => setTimeout(() => {
+        const el = cellEls[r][c]; el.classList.add('flip'); void el.offsetWidth;
+      }, i * 40));
+      setTimeout(() => {
+        boardEl.classList.remove('win'); animating = false;
+        if (li + 1 > unlocked) unlocked = Math.min(li + 1, STAGES.length);
+        saveProgress();
+        renderNav(); showWin();
+      }, 900 + cells.length * 40);
+    }
+    // 星をn個並べる（colors指定で1つずつ色付け）
+    const ALLCLEAR_COLORS = ['#ffd23f', '#ffcf8a', '#9dff9a', '#7bf0e6', '#86d8ff', '#c07bff', '#ff5cf0', '#ff7ab0', '#ff9d5c', '#b6ff5c'];
+    function starRow(n, colors) {
+      let s = '';
+      for (let i = 0; i < n; i++) { const col = colors ? `;color:${colors[i % colors.length]}` : ''; s += `<span class="st" style="--i:${i}${col}">★</span>`; }
+      return s;
+    }
+    function showWin() {
+      const last = li === STAGES.length - 1;
+      const levelEnd = ((li + 1) % PER_LEVEL === 0); // そのLevelの最終パズルを解いた
+      const lv = STAGES[li].lv;
+      if (levelEnd) {
+        // 「Level n クリア！」専用の小画面＋ハッピーな効果音（星はn個）
+        document.getElementById('lcStars').innerHTML = starRow(lv);
+        document.getElementById('lcTitleText').textContent = `Level ${lv} クリア！`;
+        const msg = document.getElementById('lcMsg');
+        const nx = document.getElementById('lcNext');
+        if (last) {
+          msg.innerHTML = 'すべての Level を制覇！';
+          nx.textContent = 'つづく →';
+        } else {
+          msg.innerHTML = `次は <b>Level ${lv + 1}「${LEVEL_INFO[lv].title}」</b><br>${LEVEL_INFO[lv].add} が加わる`;
+          nx.textContent = '次のパズルへ';
+        }
+        sfx.levelup();
+        document.getElementById('levelclear').classList.add('show');
+      } else {
+        const t = document.getElementById('winTitle'), m = document.getElementById('winMsg'), nb = document.getElementById('nextBtn');
+        t.textContent = 'COMPLETION';
+        m.innerHTML = `<span class="st">パズル ${STAGES[li].id} クリア / 手数 ${moves}</span>`;
+        nb.textContent = '次のパズル →';
+        overlay.classList.add('show');
+      }
+    }
+
+    /* ---------- navigation (levels + problems) ---------- */
+    // フリーはクリア済み集合、メインはフロンティアで「クリア済み」を判定
+    function cleared(idx) { return freeMode ? freeCleared.has(idx) : idx < unlocked; }
+    function renderNav() {
+      // level tabs
+      levelbarEl.innerHTML = '';
+      const curLv = STAGES[li].lv;
+      LEVEL_INFO.forEach(info => {
+        const first = (info.lv - 1) * PER_LEVEL;
+        const locked = !freeMode && unlocked < first;   // フリーは全開放
+        let done;
+        if (freeMode) { done = true; for (let j = 0; j < PER_LEVEL; j++) if (!freeCleared.has(first + j)) { done = false; break; } }
+        else done = unlocked >= info.lv * PER_LEVEL;     // フリーもLevel全問クリアで点灯
+        const el = document.createElement('div');
+        el.className = 'levtab' + (info.lv === curLv ? ' cur' : '') + (done ? ' done' : '') + (locked ? ' locked' : '');
+        el.innerHTML = `<div class="lv">LV ${info.lv}</div><div class="lt">${info.title}</div>`;
+        if (!locked) el.addEventListener('click', () => { overlay.classList.remove('show'); loadLevel(first); });
+        levelbarEl.appendChild(el);
+      });
+      // problem dots for current level
+      stagebarEl.innerHTML = '';
+      const base = (curLv - 1) * PER_LEVEL;
+      for (let k = 0; k < PER_LEVEL; k++) {
+        const idx = base + k;
+        const d = document.createElement('div');
+        const isDone = cleared(idx) || (idx === li && solved);   // フリーもクリア済みパズルの数字を点灯
+        const isLocked = !freeMode && idx > unlocked;
+        d.className = 'dot' + (idx === li ? ' cur' : '') + (isDone ? ' done' : '') + (isLocked ? ' locked' : '');
+        d.textContent = k + 1;
+        if (!isLocked) d.addEventListener('click', () => { overlay.classList.remove('show'); loadLevel(idx); });
+        stagebarEl.appendChild(d);
+      }
+    }
+
+    /* ---------- toast ---------- */
+    let toastT;
+    function toast(m) {
+      const e = document.getElementById('toast'); e.textContent = m; e.classList.add('show');
+      clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 1600);
+    }
+
+    /* ---------- controls ---------- */
+    function syncMute() { document.getElementById('muteBtn').textContent = settings.sound ? '🔊 音' : '🔇 音'; }
+    document.getElementById('undoBtn').addEventListener('click', undo);
+    document.getElementById('resetBtn').addEventListener('click', () => { if (!animating) loadLevel(li, true); });
+    document.getElementById('muteBtn').addEventListener('click', () => {
+      // 「音」ボタンは効果音とBGMをまとめてON/OFF（音楽スイッチ＝BGM選択と連動）
+      const on = !settings.sound;
+      settings.sound = on;
+      muted = !settings.sound; syncMute();
+      if (on) ac();
+      setMusicOn(on);         // BGM(track)と音楽スイッチも連動して停止／復帰・保存
+      renderSettingsUI();     // 設定画面のトグル表示も同期
+    });
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      overlay.classList.remove('show');
+      if (li === STAGES.length - 1) { unlocked = 0; saveProgress(); loadLevel(0); } else loadLevel(li + 1);
+    });
+    document.getElementById('winRetry').addEventListener('click', () => { overlay.classList.remove('show'); loadLevel(li, true); });
+    document.getElementById('winToTitle').addEventListener('click', () => { overlay.classList.remove('show'); toTitle(); });
+    // Level クリア画面のボタン
+    document.getElementById('lcNext').addEventListener('click', () => {
+      document.getElementById('levelclear').classList.remove('show');
+      if (li === STAGES.length - 1) {
+        // Level 10 クリア！のあとに「ALL CLEAR！」＋10個の星＋パーフェクトのファンファーレ
+        document.getElementById('acStars').innerHTML = starRow(10, ALLCLEAR_COLORS);
+        document.getElementById('allclear').classList.add('show');
+        sfx.perfect();
+      } else loadLevel(li + 1);
+    });
+    document.getElementById('lcToTitle').addEventListener('click', () => {
+      document.getElementById('levelclear').classList.remove('show');
+      toTitle();
+    });
+    // ALL CLEAR 画面
+    document.getElementById('acReplay').addEventListener('click', () => {
+      document.getElementById('allclear').classList.remove('show');
+      loadLevel(0); // 進行（全クリア状態）は保持したまま最初から遊べる
+    });
+    document.getElementById('acTitle').addEventListener('click', () => {
+      document.getElementById('allclear').classList.remove('show');
+      toTitle();
+    });
+    // ---- フリーモード ----
+    document.getElementById('freeBtn').addEventListener('click', () => { renderTitleButtons(); showScreen('freemenu'); });
+    document.getElementById('freeBack').addEventListener('click', () => showScreen('title'));
+    document.getElementById('continueBtnF').addEventListener('click', () => { if (freeCleared.size > 0 || freeResume > 0) startContinueFree(); });
+    document.getElementById('newgameBtnF').addEventListener('click', () => {
+      if (freeCleared.size > 0 || freeResume > 0) confirmAction('フリーモードの進行を消して<b>最初から</b>始めますか？<br><span style="color:var(--muted);font-size:12px">この操作は取り消せません。</span>', startNewGameFree);
+      else startNewGameFree();
+    });
+    document.getElementById('fbPlus').addEventListener('click', () => { freeTarget++; renderFreebar(); update(); });
+    document.getElementById('fbMinus').addEventListener('click', () => { if (freeTarget > freeOptimal) { freeTarget--; renderFreebar(); update(); } });
+    document.getElementById('frNext').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); loadLevel((li + 1) % STAGES.length); });
+    document.getElementById('frRetry').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); loadLevel(li, true); });
+    document.getElementById('frTitle2').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); toTitle(); });
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
+      if (e.key === 'r' || e.key === 'R') { if (!animating && !document.getElementById('app').classList.contains('hidden')) loadLevel(li, true); }
+    });
+    document.addEventListener('pointerdown', () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
+
+    /* ---------- out-game screens (title / menu / settings / how-to) ---------- */
+    const scr = {
+      title: document.getElementById('titlescreen'),
+      mainmenu: document.getElementById('mainmenu'),
+      freemenu: document.getElementById('freemenu'),
+      gamemenu: document.getElementById('gamemenu'),
+      settings: document.getElementById('settings'),
+      howto: document.getElementById('howto')
+    };
+    let menuFrom = 'title';   // 設定/遊び方を開いた元（title or game）。閉じる先を決める
+    function showScreen(name) { Object.keys(scr).forEach(k => scr[k].classList.toggle('show', k === name)); updateMusic(); }
+    function hideScreens() { Object.values(scr).forEach(s => s.classList.remove('show')); }
+    function backToGame() {
+      hideScreens();
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('menuBtn').classList.add('show');
+      fitBoard();
+      updateMusic();
+    }
+    function enterGame(idx) { freeMode = false; backToGame(); loadLevel(idx == null ? resumeIndex : idx); }
+    function enterFree(idx) { freeMode = true; freeTarget = 0; backToGame(); loadLevel(idx == null ? 0 : idx); }
+    // つづきから：保存された最後の未完了パズル（＝到達フロンティア unlocked）
+    function continueIndex() { return Math.min(unlocked, STAGES.length - 1); }
+    function startContinue() { enterGame(continueIndex()); }
+    function startNewGame() { unlocked = 0; resumeIndex = 0; saveProgress(); enterGame(0); }
+    // フリーモードの つづき / はじめから
+    function freeContinueIndex() { return Math.min(freeResume, STAGES.length - 1); }
+    function startContinueFree() { enterFree(freeContinueIndex()); }
+    function startNewGameFree() { freeCleared = new Set(); freeResume = 0; saveFreeProgress(); enterFree(0); }
+    // タイトルの「つづきから」ボタン：進行が無ければ無効化し、あれば再開パズル番号を表示
+    function renderTitleButtons() {
+      const cb = document.getElementById('continueBtn');
+      if (unlocked <= 0) { cb.disabled = true; cb.textContent = 'つづきから'; }
+      else { cb.disabled = false; cb.textContent = 'つづきから　' + STAGES[continueIndex()].id; }
+      const cbf = document.getElementById('continueBtnF');
+      if (cbf) {
+        if (freeCleared.size <= 0 && freeResume <= 0) { cbf.disabled = true; cbf.textContent = 'つづきから'; }
+        else { cbf.disabled = false; cbf.textContent = 'つづきから　' + STAGES[freeContinueIndex()].id; }
+      }
+    }
+    function toTitle() {
+      freeMode = false;
+      hideScreens();
+      document.getElementById('app').classList.add('hidden');
+      document.getElementById('menuBtn').classList.remove('show');
+      renderTitleButtons();
+      showScreen('title');
+    }
+    function renderSettingsUI() {
+      document.getElementById('tgSound').classList.toggle('on', settings.sound);
+      document.getElementById('tgMusic').classList.toggle('on', musicOn());
+      document.getElementById('tgVideo').classList.toggle('on', settings.video);
+      document.getElementById('tgVibe').classList.toggle('on', settings.vibe);
+      document.getElementById('tgCb').classList.toggle('on', settings.cb);
+      document.getElementById('tgMotion').classList.toggle('on', settings.reduceMotion);
+      syncTrackSelects();
+    }
+    const TRACK_SELECT_IDS = ['trackSelect', 'trackSelectTitle'];
+    // 両画面のドロップダウンに曲を並べ、現在の選択を反映
+    function populateTrackSelects() {
+      TRACK_SELECT_IDS.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = '';
+        TRACKS.forEach(tr => {
+          const o = document.createElement('option');
+          o.value = tr.id; o.textContent = tr.opt;
+          sel.appendChild(o);
+        });
+      });
+      syncTrackSelects();
+    }
+    // 選択値を両ドロップダウンに揃える
+    function syncTrackSelects() {
+      const cur = settings.track || 'menu';
+      TRACK_SELECT_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.value = cur; });
+    }
+    // BGMが有効か（track が off でない）
+    function musicOn() { return settings.track !== 'off'; }
+    // 音楽ON/OFFを切り替え（music スイッチと track を常に連動）
+    function setMusicOn(on) {
+      if (on) { settings.track = (settings.lastTrack && settings.lastTrack !== 'off') ? settings.lastTrack : 'menu'; }
+      else { if (settings.track !== 'off') settings.lastTrack = settings.track; settings.track = 'off'; }
+      settings.music = on;
+      savePrefs(); syncTrackSelects(); updateMusic();
+    }
+    // ドロップダウンで曲が選ばれたとき（保存・同期・即再生／音楽スイッチも連動）
+    function onTrackChange(id) {
+      settings.track = id;
+      if (id !== 'off') settings.lastTrack = id;
+      settings.music = id !== 'off';        // 曲を選べばON、OFFを選べばOFF
+      savePrefs(); syncTrackSelects();
+      updateMusic();                         // 選んだ曲を今の画面でそのまま再生
+      renderSettingsUI();                    // 音楽トグルの表示も更新
+    }
+    function closeMenu() { if (menuFrom === 'game') backToGame(); else showScreen('title'); }
+    // タイトル → メインモード選択画面（つづきから / はじめから）
+    document.getElementById('mainModeBtn').addEventListener('click', () => { renderTitleButtons(); showScreen('mainmenu'); });
+    document.getElementById('mainBack').addEventListener('click', () => showScreen('title'));
+    document.getElementById('continueBtn').addEventListener('click', () => { if (unlocked > 0) startContinue(); });
+    document.getElementById('newgameBtn').addEventListener('click', () => {
+      if (unlocked > 0) confirmAction('進行データを消して<b>最初から</b>始めますか？<br><span style="color:var(--muted);font-size:12px">この操作は取り消せません。</span>', startNewGame);
+      else startNewGame();
+    });
+    // タイトル画面から
+    document.getElementById('howtoBtn').addEventListener('click', () => { menuFrom = 'title'; showScreen('howto'); });
+    document.getElementById('settingsBtn').addEventListener('click', () => { menuFrom = 'title'; renderSettingsUI(); showScreen('settings'); });
+    // ゲーム内ハンバーガー → メニュー（遊び方 / 設定 を選ぶ）
+    document.getElementById('menuBtn').addEventListener('click', () => showScreen('gamemenu'));
+    document.getElementById('mnHowto').addEventListener('click', () => { menuFrom = 'game'; showScreen('howto'); });
+    document.getElementById('mnSettings').addEventListener('click', () => { menuFrom = 'game'; renderSettingsUI(); showScreen('settings'); });
+    document.getElementById('mnToTitle').addEventListener('click', toTitle);
+    document.getElementById('mnClose').addEventListener('click', backToGame);
+    // 遊び方・設定の共通ボタン（タイトルへ / 閉じる）
+    document.getElementById('howtoClose').addEventListener('click', closeMenu);
+    document.getElementById('howtoToTitle').addEventListener('click', toTitle);
+    document.getElementById('settingsClose').addEventListener('click', closeMenu);
+    document.getElementById('toTitleBtn').addEventListener('click', toTitle);
+    document.getElementById('tgSound').addEventListener('click', () => { settings.sound = !settings.sound; muted = !settings.sound; syncMute(); savePrefs(); renderSettingsUI(); });
+    document.getElementById('tgMusic').addEventListener('click', () => { setMusicOn(!musicOn()); renderSettingsUI(); });
+    document.getElementById('tgVideo').addEventListener('click', () => { settings.video = !settings.video; applyVideoSetting(); savePrefs(); renderSettingsUI(); });
+    document.getElementById('tgVibe').addEventListener('click', () => { settings.vibe = !settings.vibe; if (settings.vibe && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { } } savePrefs(); renderSettingsUI(); });
+    document.getElementById('tgCb').addEventListener('click', () => { settings.cb = !settings.cb; applyA11y(); savePrefs(); renderSettingsUI(); });
+    document.getElementById('tgMotion').addEventListener('click', () => { settings.reduceMotion = !settings.reduceMotion; applyA11y(); savePrefs(); renderSettingsUI(); });
+    TRACK_SELECT_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.addEventListener('change', e => onTrackChange(e.target.value)); });
+    document.getElementById('resetProgBtn').addEventListener('click', () => {
+      confirmAction('<b>メイン・フリー両方</b>の進行データ（クリア状況）を<b>すべて削除</b>しますか？<br><span style="color:var(--muted);font-size:12px">この操作は取り消せません。</span>', () => {
+        unlocked = 0; resumeIndex = 0; li = 0; saveProgress();
+        freeCleared = new Set(); freeResume = 0; saveFreeProgress();
+        if (!document.getElementById('app').classList.contains('hidden')) loadLevel(0);
+        renderTitleButtons();
+        toast('進行データ（メイン・フリー）をリセットしました');
+      });
+    });
+
+    /* ---------- boot ---------- */
+    try { const saved = localStorage.getItem('cause_world'); if (saved && THEMES.some(t => t.id === saved)) themeId = saved; } catch (e) { }
+    loadPrefs();
+    applyTheme(themeId);
+    syncMute();
+    populateTrackSelects();
+    renderSettingsUI();
+    renderTitleButtons();
+    showScreen('title');   // アウトゲーム：まずタイトル画面から
+    (function () {
+      const bv = document.getElementById('bgvideo');
+      if (!bv) return;
+      const tryPlay = () => { if (settings.video && bv.paused) { const p = bv.play(); if (p && p.catch) p.catch(() => { }); } };
+      tryPlay();
+      document.addEventListener('pointerdown', tryPlay, { once: false });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) tryPlay(); });
+      // 意図しない一時停止（省電力・可視性制御・デコード詰まり等）からの自動リジューム。
+      // 設定で背景動画をOFFにしたときの pause は applyVideoSetting が display:none にするので対象外。
+      bv.addEventListener('pause', () => { if (settings.video && bv.style.display !== 'none') setTimeout(tryPlay, 120); });
+      bv.addEventListener('stalled', tryPlay);
+      bv.addEventListener('suspend', tryPlay);
+      // 保険：数秒ごとに再生状態を監視して、止まっていたら再開
+      setInterval(() => { if (settings.video && bv.style.display !== 'none' && bv.paused && !document.hidden) tryPlay(); }, 4000);
+    })();
+    // BGMは自動再生制限があるため、最初のユーザー操作で確実にキックする
+    (function () {
+      const kick = () => { updateMusic(); MUSIC.resume(); };
+      document.addEventListener('pointerdown', kick, { once: false });
+      document.addEventListener('keydown', kick, { once: false });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) MUSIC.resume(); });
+    })();
+    // オフラインでも遊べるようにサービスワーカーを登録（http/https のときだけ。file:// では無効）
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { }); });
+    }
+  </script>
+</body>
+
+</html>
