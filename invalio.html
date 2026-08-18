@@ -3,8 +3,20 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>INVALIO — インヴァリオ</title>
+  <!-- ===== ホーム画面に追加でアプリ化（PWA） ===== -->
+  <meta name="theme-color" content="#04061a">
+  <meta name="description" content="INVALIO — 波及する原因を重ねて打ち消し合うパズル">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- iOS（iPhone/iPad）でアプリっぽく全画面表示 -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="INVALIO">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
   <style>
     :root {
       --bg: #05060c;
@@ -64,6 +76,11 @@
       object-fit: cover;
       z-index: -3;
       pointer-events: none;
+      /* 独立したGPUレイヤーに載せ、UIの再描画で動画がカクつくのを防ぐ */
+      transform: translateZ(0);
+      will-change: transform;
+      backface-visibility: hidden;
+      contain: strict;
     }
 
     #bgtint {
@@ -75,6 +92,7 @@
       background: radial-gradient(1200px 800px at 18% -10%, var(--bg1) 0, transparent 55%),
         radial-gradient(1000px 700px at 100% 110%, var(--bg2) 0, transparent 55%),
         var(--tint, rgba(4, 6, 20, .5));
+      transform: translateZ(0);
     }
 
     body::before {
@@ -86,7 +104,9 @@
       background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
       background-size: 46px 46px;
       mask-image: radial-gradient(circle at 50% 42%, #000 0, transparent 80%);
+      -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 0, transparent 80%);
       opacity: .28;
+      transform: translateZ(0);
     }
 
     #app {
@@ -145,22 +165,51 @@
 
     /* ===== BGM選択ドロップダウン ===== */
     .bgmselect {
-      appearance: none; -webkit-appearance: none; -moz-appearance: none;
-      font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--text);
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
       background-color: rgba(255, 255, 255, .04);
-      border: 1px solid var(--panel-edge); border-radius: 12px;
-      padding: 9px 34px 9px 12px; cursor: pointer; outline: none;
+      border: 1px solid var(--panel-edge);
+      border-radius: 12px;
+      padding: 9px 34px 9px 12px;
+      cursor: pointer;
+      outline: none;
       transition: border-color .16s, background .16s;
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%239aa4bf' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-      background-repeat: no-repeat; background-position: right 12px center;
+      background-repeat: no-repeat;
+      background-position: right 12px center;
     }
-    .bgmselect:hover { border-color: var(--accent); background-color: rgba(255, 255, 255, .07); }
-    .bgmselect:focus { border-color: var(--accent); }
-    .bgmselect option { color: #0a0d18; background: #eef1f8; }
+
+    .bgmselect:hover {
+      border-color: var(--accent);
+      background-color: rgba(255, 255, 255, .07);
+    }
+
+    .bgmselect:focus {
+      border-color: var(--accent);
+    }
+
+    .bgmselect option {
+      color: #0a0d18;
+      background: #eef1f8;
+    }
+
     /* 設定画面：右寄せで幅を確保 */
-    .setrow .bgmselect { max-width: 58%; }
+    .setrow .bgmselect {
+      max-width: 58%;
+    }
+
     /* タイトル画面：中央・横幅いっぱい */
-    .worldpick .bgmselect { display: block; width: 100%; text-align: center; padding-left: 34px; }
+    .worldpick .bgmselect {
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding-left: 34px;
+    }
 
     .worldbar .wlabel {
       font-size: 10px;
@@ -420,13 +469,49 @@
     }
 
     /* ===== アクセシビリティ ===== */
-    body.cb .cell::after { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--cell)*.44); font-weight: 800; line-height: 1; pointer-events: none; z-index: 2; }
-    body.cb .cell.good::after { content: "✓"; color: #04121a; }
-    body.cb .cell.bad::after { content: "✕"; color: #04121a; }
-    body.cb .cell.need::after { content: "•"; color: var(--need); text-shadow: 0 0 8px var(--need-glow); }
-    body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-    body.reduce-motion .wave { display: none !important; }
-    #confirmdlg { z-index: 60; }
+    body.cb .cell::after {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: calc(var(--cell)*.44);
+      font-weight: 800;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    body.cb .cell.good::after {
+      content: "✓";
+      color: #04121a;
+    }
+
+    body.cb .cell.bad::after {
+      content: "✕";
+      color: #04121a;
+    }
+
+    body.cb .cell.need::after {
+      content: "•";
+      color: var(--need);
+      text-shadow: 0 0 8px var(--need-glow);
+    }
+
+    body.reduce-motion *,
+    body.reduce-motion *::before,
+    body.reduce-motion *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+
+    body.reduce-motion .wave {
+      display: none !important;
+    }
+
+    #confirmdlg {
+      z-index: 60;
+    }
 
     .statusrow b {
       color: var(--text);
@@ -585,25 +670,24 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 10%;
-      height: 10%;
+      width: 100%;
+      height: 100%;
       border-radius: 50%;
-      transform: translate(-50%, -50%);
       border: 2px solid var(--accent);
       pointer-events: none;
+      will-change: transform, opacity;
       animation: wave .6s ease-out forwards;
     }
 
+    /* width/height ではなく transform: scale で拡大しレイアウトを起こさない（GPU合成） */
     @keyframes wave {
       0% {
-        width: 10%;
-        height: 10%;
+        transform: translate(-50%, -50%) scale(.1);
         opacity: .9;
       }
 
       100% {
-        width: 340%;
-        height: 340%;
+        transform: translate(-50%, -50%) scale(3.4);
         opacity: 0;
       }
     }
@@ -1398,7 +1482,7 @@
         <div class="whead" style="margin-top:16px">BGM</div>
         <select class="bgmselect" id="trackSelectTitle"></select>
       </div>
-      <button class="bigbtn primary" id="mainModeBtn">メインモード</button>
+      <button class="bigbtn primary" id="mainModeBtn">🎯 メインモード</button>
       <button class="bigbtn" id="freeBtn" style="border-color:var(--good);color:#fff">🕊 フリーモード</button>
       <div class="subbtns">
         <button class="sbtn" id="howtoBtn">遊び方</button>
@@ -1414,6 +1498,17 @@
       <button class="bigbtn primary" id="continueBtn">つづきから</button>
       <button class="bigbtn" id="newgameBtn">はじめから</button>
       <div class="closebar" style="margin-top:16px"><button class="sbtn" id="mainBack" style="max-width:170px">←
+          タイトルへ</button></div>
+    </div>
+  </div>
+
+  <!-- ===================== OUT-GAME: フリーモード（つづきから / はじめから） ===================== -->
+  <div class="screen" id="freemenu">
+    <div class="panel panelcard" style="text-align:center">
+      <h3>🕊 フリーモード</h3>
+      <button class="bigbtn primary" id="continueBtnF">つづきから</button>
+      <button class="bigbtn" id="newgameBtnF">はじめから</button>
+      <div class="closebar" style="margin-top:16px"><button class="sbtn" id="freeBack" style="max-width:170px">←
           タイトルへ</button></div>
     </div>
   </div>
@@ -1446,7 +1541,7 @@
       <div class="setrow">
         <div>
           <div class="lab">背景動画</div>
-          <div class="desc">オフで電池・通信を節約</div>
+          <div class="desc">オフでバッテリーを節約</div>
         </div>
         <div class="toggle" id="tgVideo"></div>
       </div>
@@ -1474,14 +1569,14 @@
       <div class="setrow" style="border-bottom:0;padding-bottom:4px">
         <div>
           <div class="lab">WORLD</div>
-          <div class="desc">世界観（配色・背景動画・音楽）を切り替え</div>
+          <div class="desc">世界観（配色・背景動画）を切り替え</div>
         </div>
       </div>
       <div class="worldbar" style="justify-content:flex-start;margin:0 0 6px"></div>
       <div class="setrow">
         <div>
           <div class="lab">進行データ</div>
-          <div class="desc">クリア状況をリセット</div>
+          <div class="desc">メイン・フリー両方のクリア状況をリセット</div>
         </div>
         <button class="sbtn" id="resetProgBtn" style="max-width:120px">リセット</button>
       </div>
@@ -1572,7 +1667,11 @@
     <div class="card">
       <h2 id="winTitle">COMPLETION</h2>
       <p id="winMsg"></p>
-      <button class="btn primary" id="nextBtn">次のステージ →</button>
+      <div class="lcbtns">
+        <button class="bigbtn primary" id="nextBtn">次のパズル →</button>
+        <button class="bigbtn" id="winRetry">もう一度</button>
+        <button class="bigbtn" id="winToTitle">タイトルへ</button>
+      </div>
     </div>
   </div>
 
@@ -1608,7 +1707,7 @@
       <h2 id="frTitle">完成！</h2>
       <p id="frMsg"></p>
       <div class="lcbtns">
-        <button class="bigbtn primary" id="frNext">次のお題へ</button>
+        <button class="bigbtn primary" id="frNext">次のパズル →</button>
         <button class="bigbtn" id="frRetry">もう一度</button>
         <button class="bigbtn" id="frTitle2">タイトルへ</button>
       </div>
@@ -1621,7 +1720,8 @@
       <h2 style="color:var(--bad);text-shadow:0 0 18px var(--bad-glow);font-size:20px">確認</h2>
       <p id="cfMsg"></p>
       <div class="lcbtns">
-        <button class="bigbtn" id="cfYes" style="border-color:var(--bad);color:#fff;background:color-mix(in srgb,var(--bad) 18%,transparent)">削除する</button>
+        <button class="bigbtn" id="cfYes"
+          style="border-color:var(--bad);color:#fff;background:color-mix(in srgb,var(--bad) 18%,transparent)">削除する</button>
         <button class="bigbtn primary" id="cfNo">キャンセル</button>
       </div>
     </div>
@@ -2231,6 +2331,7 @@
     let unlocked = 0, moves = 0, history = [], animating = false;
     // フリーモード（全ピース無制限・手数目標は自分で設定・ソフト目標）
     let freeMode = false, freeTarget = 0, freeOptimal = 0;
+    let freeCleared = new Set(), freeResume = 0;   // フリーモードの進行（クリア済みパズルの集合／最後に開いたパズル）
     const optimalOf = (i) => Object.values(STAGES[i].tray).reduce((a, b) => a + b, 0); // メインの最短手数
     const allShapesInf = () => { const t = {}; TRAY_ORDER.forEach(s => t[s] = Infinity); return t; };
 
@@ -2238,6 +2339,7 @@
     const settings = {
       sound: true, music: true, video: true, vibe: true,
       track: 'menu',   // BGMの選択（menu=INVALIO / off=無音 / 各曲id）。全画面で継続再生。
+      lastTrack: 'menu',   // 音楽ONに戻したとき復帰する曲
       cb: false,   // 色覚サポート
       reduceMotion: !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)
     };
@@ -2245,8 +2347,21 @@
     function loadPrefs() {
       try { const s = JSON.parse(localStorage.getItem('inv_settings')); if (s) Object.assign(settings, s); } catch (e) { }
       try { const p = JSON.parse(localStorage.getItem('inv_progress')); if (p) { unlocked = Math.min(p.unlocked || 0, STAGES.length); resumeIndex = Math.min(p.last || 0, STAGES.length - 1); } } catch (e) { }
+      try {
+        const f = JSON.parse(localStorage.getItem('inv_free'));
+        if (f) {
+          freeResume = Math.min(f.last || 0, STAGES.length - 1);
+          if (Array.isArray(f.cleared)) freeCleared = new Set(f.cleared.filter(i => i >= 0 && i < STAGES.length));
+          else if (f.unlocked) { freeCleared = new Set(); for (let i = 0; i < Math.min(f.unlocked, STAGES.length); i++) freeCleared.add(i); }  // 旧フォーマット移行
+        }
+      } catch (e) { }
       // 旧「ワールド連動(auto)」や未知の値は INVALIO(menu) に移行
       if (settings.track !== 'off' && !TRACKS.some(t => t.id === settings.track)) settings.track = 'menu';
+      // 音楽スイッチ(music)とBGM選択(track)の整合をとる：music=OFF は track=off と同一
+      if (settings.music === false) settings.track = 'off';
+      settings.music = settings.track !== 'off';
+      if (settings.track !== 'off') settings.lastTrack = settings.track;
+      if (!settings.lastTrack || settings.lastTrack === 'off') settings.lastTrack = 'menu';
       muted = !settings.sound;
       applyA11y();
     }
@@ -2265,6 +2380,7 @@
     }
     function savePrefs() { try { localStorage.setItem('inv_settings', JSON.stringify(settings)); } catch (e) { } }
     function saveProgress() { try { localStorage.setItem('inv_progress', JSON.stringify({ unlocked, last: li })); } catch (e) { } }
+    function saveFreeProgress() { try { localStorage.setItem('inv_free', JSON.stringify({ cleared: [...freeCleared], last: freeResume })); } catch (e) { } }
 
     const boardEl = document.getElementById('board');
     const trayEl = document.getElementById('tray');
@@ -2323,6 +2439,7 @@
       VOL: 0.55,                     // 最大音量（0〜1）
       FADE: 800,                     // クロスフェード時間(ms)
       curSrc: null, cur: null, fadeTimer: null, playing: false, cache: {},
+      mode: 'single', playlist: null, plIndex: 0, plKey: null,   // 'all'用プレイリスト状態
       _make(src) {
         let a = this.cache[src];
         if (!a) { a = new Audio(src); a.loop = true; a.preload = 'auto'; a.volume = 0; this.cache[src] = a; }
@@ -2330,13 +2447,39 @@
       },
       // src の曲へクロスフェードで切り替える（同じ曲なら何もしない）
       play(src) {
+        this.mode = 'single'; this.playlist = null; this.plKey = null;
         if (!src) { this.stop(); return; }
         if (this.playing && this.curSrc === src) return;
         this.curSrc = src; this.playing = true;
         const next = this._make(src);
+        next.loop = true; next.onended = null;
         const prev = this.cur;
         this.cur = next;
         try { next.currentTime = next.currentTime || 0; const p = next.play(); if (p && p.catch) p.catch(() => { }); } catch (e) { }
+        this._fade(prev, next);
+      },
+      // 複数曲を順番に無限ループ再生（曲が終わるたび次へ）
+      playPlaylist(list) {
+        const key = list.join('|');
+        if (this.mode === 'playlist' && this.plKey === key && this.playing) return; // 同じプレイリスト継続中なら何もしない
+        clearInterval(this.fadeTimer); this.fadeTimer = null;
+        this.mode = 'playlist'; this.playlist = list.slice(); this.plKey = key; this.plIndex = 0; this.playing = true;
+        this._playPlItem();
+      },
+      _playPlItem() {
+        if (this.mode !== 'playlist' || !this.playlist || !this.playlist.length) return;
+        const src = this.playlist[this.plIndex % this.playlist.length];
+        this.curSrc = src;
+        const next = this._make(src);
+        next.loop = false;
+        next.onended = () => {
+          if (this.mode !== 'playlist' || !this.playing) return;
+          this.plIndex = (this.plIndex + 1) % this.playlist.length;
+          this._playPlItem();
+        };
+        const prev = this.cur;
+        this.cur = next;
+        try { next.currentTime = 0; const p = next.play(); if (p && p.catch) p.catch(() => { }); } catch (e) { }
         this._fade(prev, next);
       },
       _fade(prev, next) {
@@ -2354,6 +2497,8 @@
         }, 40);
       },
       stop() {
+        this.mode = 'single'; this.playlist = null; this.plKey = null;
+        if (this.cur) this.cur.onended = null;
         if (!this.playing && !this.cur) return;
         this.playing = false; this.curSrc = null;
         clearInterval(this.fadeTimer);
@@ -2375,8 +2520,11 @@
     const TRACKS = [
       { id: 'menu', label: 'INVALIO', opt: 'INVALIO', src: MUSIC.MENU_SRC },
       ...THEMES.map(t => ({ id: t.id, label: t.tagline, opt: t.tagline, src: t.bgm || null })),
+      { id: 'all', label: 'ALL', opt: 'ALL（全曲ループ）', src: null },
       { id: 'off', label: 'OFF', opt: 'OFF（無音）', src: null }
     ];
+    // ALL用プレイリスト：INVALIO〜Amber Horizon（実ファイルのある曲）を並び順どおりに
+    const ALL_PLAYLIST = TRACKS.filter(t => t.src).map(t => t.src);
     // 選択中トラックの再生ソースを返す。固定曲は画面に関係なく常にその曲。off/未設定は null=無音。
     function trackSrc() {
       const id = settings.track || 'menu';
@@ -2387,12 +2535,14 @@
     // 選んだ曲を全画面で継続再生（クリック等でINVALIOに戻さない）。music トグルOFFで停止。
     function updateMusic() {
       if (!settings.music) { MUSIC.stop(); return; }
+      if ((settings.track || 'menu') === 'all') { MUSIC.playPlaylist(ALL_PLAYLIST); return; }
       MUSIC.play(trackSrc());
     }
 
     /* ---------- load ---------- */
     function parseMap(map) { return map.map(row => row.split('')); }
-    function loadLevel(i) {
+    // forceReset=true（やり直す）なら、クリア済みでも必ず初期状態から
+    function loadLevel(i, forceReset = false) {
       li = i; const L = STAGES[i];
       const sm = parseMap(L.start), gm = parseMap(L.goal);
       rows = sm.length; cols = sm[0].length;
@@ -2405,17 +2555,25 @@
           goal[r][c] = gm[r][c] === 'O' ? 1 : 0;
         }
       }
-      selected = null; solved = false; moves = 0; history = []; animating = false;
+      selected = null; moves = 0; history = []; animating = false;
+      // クリア済みパズルに戻ったら完成状態（＝目標の点灯）で復元。やり直す時は復元しない。
+      const restoreSolved = !forceReset && cleared(i);
+      if (restoreSolved) {
+        for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) if (!wall[r][c]) state[r][c] = goal[r][c];
+        solved = true;
+      } else {
+        solved = false;
+      }
       if (freeMode) {
-        tray = allShapesInf();               // 全ピース無制限
         freeOptimal = optimalOf(i);          // メインの最短手数
         freeTarget = Math.max(freeTarget, freeOptimal); // 目標は最短以上（設定を引き継ぐ）
-      } else {
-        tray = Object.assign({}, L.tray);
       }
+      // 復元時はピース消費済みとして空トレイ（やり直すと通常トレイに戻る）
+      tray = restoreSolved ? {} : (freeMode ? allShapesInf() : Object.assign({}, L.tray));
       buildBoard(); renderTray(); autoSelect(); update(); renderNav(); fitBoard();
       renderFreebar();
-      if (!freeMode) { resumeIndex = i; saveProgress(); }   // フリーはメイン進行を保存しない
+      if (!freeMode) { resumeIndex = i; saveProgress(); }   // メイン進行を保存
+      else { freeResume = i; saveFreeProgress(); }   // フリーは最後に開いたパズルを保存（クリア数は playFreeWin で加算）
     }
     function renderFreebar() {
       const fb = document.getElementById('freebar');
@@ -2466,20 +2624,29 @@
       }
       return out;
     }
+    let pvList = [];   // 現在プレビュー中のセル（毎回のquerySelectorAllを避けて軽量化）
+    function clearPreview() {
+      for (const el of pvList) el.classList.remove('pv', 'pvc');
+      pvList.length = 0;
+    }
     function preview(r, c, on) {
       if (animating || solved) return;
       if (wall[r][c]) return;
-      const cells = on ? affected(r, c) : [];
-      document.querySelectorAll('.cell.pv,.cell.pvc').forEach(e => e.classList.remove('pv', 'pvc'));
+      clearPreview();
       if (on && selected && (freeMode || tray[selected] > 0)) {
-        cells.forEach(([nr, nc]) => cellEls[nr][nc].classList.add('pv'));
-        cellEls[r][c].classList.add('pvc');
+        for (const [nr, nc] of affected(r, c)) { const el = cellEls[nr][nc]; el.classList.add('pv'); pvList.push(el); }
+        const cc = cellEls[r][c]; cc.classList.add('pvc'); pvList.push(cc);
       }
     }
     function onPlace(r, c) {
       if (animating || solved) return;
       if (wall[r][c]) { toast('壁には置けません'); return; }
-      if (!selected) { toast('先にピースを選んでください'); return; }
+      if (!selected) {
+        // ピースを使い切っている場合は「選んで」ではなく状況に合った案内を出す
+        if (!freeMode && !Object.values(tray).some(v => v > 0)) toast('ピースを使い切りました。「取り消し」か「やり直す」でやり直せます');
+        else toast('先にピースを選んでください');
+        return;
+      }
       if (!freeMode && !(tray[selected] > 0)) { toast('残りピースがありません'); return; }
       snapshot();
       const cells = affected(r, c);
@@ -2583,6 +2750,10 @@
       if (best) sfx.levelup(); else sfx.win();
       setTimeout(() => {
         boardEl.classList.remove('win'); animating = false;
+        // クリアしたパズルをフリー進行に記録（メインと同様に数字を点灯）
+        freeCleared.add(li);
+        saveFreeProgress();
+        renderNav();
         document.getElementById('frTitle').textContent = best ? '最短クリア！' : (met ? '目標達成！' : '完成！');
         document.getElementById('frMsg').innerHTML =
           `手数 <b style="color:var(--good)">${moves}</b> ／ 目標 ${freeTarget} ／ 最短 ${freeOptimal}` +
@@ -2645,6 +2816,8 @@
     }
 
     /* ---------- navigation (levels + problems) ---------- */
+    // フリーはクリア済み集合、メインはフロンティアで「クリア済み」を判定
+    function cleared(idx) { return freeMode ? freeCleared.has(idx) : idx < unlocked; }
     function renderNav() {
       // level tabs
       levelbarEl.innerHTML = '';
@@ -2652,7 +2825,9 @@
       LEVEL_INFO.forEach(info => {
         const first = (info.lv - 1) * PER_LEVEL;
         const locked = !freeMode && unlocked < first;   // フリーは全開放
-        const done = !freeMode && unlocked >= info.lv * PER_LEVEL;
+        let done;
+        if (freeMode) { done = true; for (let j = 0; j < PER_LEVEL; j++) if (!freeCleared.has(first + j)) { done = false; break; } }
+        else done = unlocked >= info.lv * PER_LEVEL;     // フリーもLevel全問クリアで点灯
         const el = document.createElement('div');
         el.className = 'levtab' + (info.lv === curLv ? ' cur' : '') + (done ? ' done' : '') + (locked ? ' locked' : '');
         el.innerHTML = `<div class="lv">LV ${info.lv}</div><div class="lt">${info.title}</div>`;
@@ -2665,7 +2840,7 @@
       for (let k = 0; k < PER_LEVEL; k++) {
         const idx = base + k;
         const d = document.createElement('div');
-        const isDone = !freeMode && (idx < unlocked || (idx === li && solved));
+        const isDone = cleared(idx) || (idx === li && solved);   // フリーもクリア済みパズルの数字を点灯
         const isLocked = !freeMode && idx > unlocked;
         d.className = 'dot' + (idx === li ? ' cur' : '') + (isDone ? ' done' : '') + (isLocked ? ' locked' : '');
         d.textContent = k + 1;
@@ -2684,14 +2859,22 @@
     /* ---------- controls ---------- */
     function syncMute() { document.getElementById('muteBtn').textContent = settings.sound ? '🔊 音' : '🔇 音'; }
     document.getElementById('undoBtn').addEventListener('click', undo);
-    document.getElementById('resetBtn').addEventListener('click', () => { if (!animating) loadLevel(li); });
+    document.getElementById('resetBtn').addEventListener('click', () => { if (!animating) loadLevel(li, true); });
     document.getElementById('muteBtn').addEventListener('click', () => {
-      settings.sound = !settings.sound; muted = !settings.sound; syncMute(); savePrefs(); if (settings.sound) ac();
+      // 「音」ボタンは効果音とBGMをまとめてON/OFF（音楽スイッチ＝BGM選択と連動）
+      const on = !settings.sound;
+      settings.sound = on;
+      muted = !settings.sound; syncMute();
+      if (on) ac();
+      setMusicOn(on);         // BGM(track)と音楽スイッチも連動して停止／復帰・保存
+      renderSettingsUI();     // 設定画面のトグル表示も同期
     });
     document.getElementById('nextBtn').addEventListener('click', () => {
       overlay.classList.remove('show');
       if (li === STAGES.length - 1) { unlocked = 0; saveProgress(); loadLevel(0); } else loadLevel(li + 1);
     });
+    document.getElementById('winRetry').addEventListener('click', () => { overlay.classList.remove('show'); loadLevel(li, true); });
+    document.getElementById('winToTitle').addEventListener('click', () => { overlay.classList.remove('show'); toTitle(); });
     // Level クリア画面のボタン
     document.getElementById('lcNext').addEventListener('click', () => {
       document.getElementById('levelclear').classList.remove('show');
@@ -2716,15 +2899,21 @@
       toTitle();
     });
     // ---- フリーモード ----
-    document.getElementById('freeBtn').addEventListener('click', enterFree);
+    document.getElementById('freeBtn').addEventListener('click', () => { renderTitleButtons(); showScreen('freemenu'); });
+    document.getElementById('freeBack').addEventListener('click', () => showScreen('title'));
+    document.getElementById('continueBtnF').addEventListener('click', () => { if (freeCleared.size > 0 || freeResume > 0) startContinueFree(); });
+    document.getElementById('newgameBtnF').addEventListener('click', () => {
+      if (freeCleared.size > 0 || freeResume > 0) confirmAction('フリーモードの進行を消して<b>最初から</b>始めますか？<br><span style="color:var(--muted);font-size:12px">この操作は取り消せません。</span>', startNewGameFree);
+      else startNewGameFree();
+    });
     document.getElementById('fbPlus').addEventListener('click', () => { freeTarget++; renderFreebar(); update(); });
     document.getElementById('fbMinus').addEventListener('click', () => { if (freeTarget > freeOptimal) { freeTarget--; renderFreebar(); update(); } });
     document.getElementById('frNext').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); loadLevel((li + 1) % STAGES.length); });
-    document.getElementById('frRetry').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); loadLevel(li); });
+    document.getElementById('frRetry').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); loadLevel(li, true); });
     document.getElementById('frTitle2').addEventListener('click', () => { document.getElementById('freeresult').classList.remove('show'); toTitle(); });
     document.addEventListener('keydown', (e) => {
       if ((e.key === 'z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
-      if (e.key === 'r' || e.key === 'R') { if (!animating && !document.getElementById('app').classList.contains('hidden')) loadLevel(li); }
+      if (e.key === 'r' || e.key === 'R') { if (!animating && !document.getElementById('app').classList.contains('hidden')) loadLevel(li, true); }
     });
     document.addEventListener('pointerdown', () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
 
@@ -2732,6 +2921,7 @@
     const scr = {
       title: document.getElementById('titlescreen'),
       mainmenu: document.getElementById('mainmenu'),
+      freemenu: document.getElementById('freemenu'),
       gamemenu: document.getElementById('gamemenu'),
       settings: document.getElementById('settings'),
       howto: document.getElementById('howto')
@@ -2747,16 +2937,25 @@
       updateMusic();
     }
     function enterGame(idx) { freeMode = false; backToGame(); loadLevel(idx == null ? resumeIndex : idx); }
-    function enterFree() { freeMode = true; freeTarget = 0; backToGame(); loadLevel(0); }
+    function enterFree(idx) { freeMode = true; freeTarget = 0; backToGame(); loadLevel(idx == null ? 0 : idx); }
     // つづきから：保存された最後の未完了パズル（＝到達フロンティア unlocked）
     function continueIndex() { return Math.min(unlocked, STAGES.length - 1); }
     function startContinue() { enterGame(continueIndex()); }
     function startNewGame() { unlocked = 0; resumeIndex = 0; saveProgress(); enterGame(0); }
+    // フリーモードの つづき / はじめから
+    function freeContinueIndex() { return Math.min(freeResume, STAGES.length - 1); }
+    function startContinueFree() { enterFree(freeContinueIndex()); }
+    function startNewGameFree() { freeCleared = new Set(); freeResume = 0; saveFreeProgress(); enterFree(0); }
     // タイトルの「つづきから」ボタン：進行が無ければ無効化し、あれば再開パズル番号を表示
     function renderTitleButtons() {
       const cb = document.getElementById('continueBtn');
       if (unlocked <= 0) { cb.disabled = true; cb.textContent = 'つづきから'; }
       else { cb.disabled = false; cb.textContent = 'つづきから　' + STAGES[continueIndex()].id; }
+      const cbf = document.getElementById('continueBtnF');
+      if (cbf) {
+        if (freeCleared.size <= 0 && freeResume <= 0) { cbf.disabled = true; cbf.textContent = 'つづきから'; }
+        else { cbf.disabled = false; cbf.textContent = 'つづきから　' + STAGES[freeContinueIndex()].id; }
+      }
     }
     function toTitle() {
       freeMode = false;
@@ -2768,7 +2967,7 @@
     }
     function renderSettingsUI() {
       document.getElementById('tgSound').classList.toggle('on', settings.sound);
-      document.getElementById('tgMusic').classList.toggle('on', settings.music);
+      document.getElementById('tgMusic').classList.toggle('on', musicOn());
       document.getElementById('tgVideo').classList.toggle('on', settings.video);
       document.getElementById('tgVibe').classList.toggle('on', settings.vibe);
       document.getElementById('tgCb').classList.toggle('on', settings.cb);
@@ -2792,13 +2991,26 @@
     }
     // 選択値を両ドロップダウンに揃える
     function syncTrackSelects() {
-      const cur = settings.track || 'auto';
+      const cur = settings.track || 'menu';
       TRACK_SELECT_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.value = cur; });
     }
-    // ドロップダウンで曲が選ばれたとき（保存・同期・即再生）
+    // BGMが有効か（track が off でない）
+    function musicOn() { return settings.track !== 'off'; }
+    // 音楽ON/OFFを切り替え（music スイッチと track を常に連動）
+    function setMusicOn(on) {
+      if (on) { settings.track = (settings.lastTrack && settings.lastTrack !== 'off') ? settings.lastTrack : 'menu'; }
+      else { if (settings.track !== 'off') settings.lastTrack = settings.track; settings.track = 'off'; }
+      settings.music = on;
+      savePrefs(); syncTrackSelects(); updateMusic();
+    }
+    // ドロップダウンで曲が選ばれたとき（保存・同期・即再生／音楽スイッチも連動）
     function onTrackChange(id) {
-      settings.track = id; savePrefs(); syncTrackSelects();
-      updateMusic();   // 選んだ曲を今の画面でそのまま再生（以降クリックしても継続）
+      settings.track = id;
+      if (id !== 'off') settings.lastTrack = id;
+      settings.music = id !== 'off';        // 曲を選べばON、OFFを選べばOFF
+      savePrefs(); syncTrackSelects();
+      updateMusic();                         // 選んだ曲を今の画面でそのまま再生
+      renderSettingsUI();                    // 音楽トグルの表示も更新
     }
     function closeMenu() { if (menuFrom === 'game') backToGame(); else showScreen('title'); }
     // タイトル → メインモード選択画面（つづきから / はじめから）
@@ -2824,18 +3036,19 @@
     document.getElementById('settingsClose').addEventListener('click', closeMenu);
     document.getElementById('toTitleBtn').addEventListener('click', toTitle);
     document.getElementById('tgSound').addEventListener('click', () => { settings.sound = !settings.sound; muted = !settings.sound; syncMute(); savePrefs(); renderSettingsUI(); });
-    document.getElementById('tgMusic').addEventListener('click', () => { settings.music = !settings.music; savePrefs(); renderSettingsUI(); updateMusic(); });
+    document.getElementById('tgMusic').addEventListener('click', () => { setMusicOn(!musicOn()); renderSettingsUI(); });
     document.getElementById('tgVideo').addEventListener('click', () => { settings.video = !settings.video; applyVideoSetting(); savePrefs(); renderSettingsUI(); });
     document.getElementById('tgVibe').addEventListener('click', () => { settings.vibe = !settings.vibe; if (settings.vibe && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { } } savePrefs(); renderSettingsUI(); });
     document.getElementById('tgCb').addEventListener('click', () => { settings.cb = !settings.cb; applyA11y(); savePrefs(); renderSettingsUI(); });
     document.getElementById('tgMotion').addEventListener('click', () => { settings.reduceMotion = !settings.reduceMotion; applyA11y(); savePrefs(); renderSettingsUI(); });
     TRACK_SELECT_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.addEventListener('change', e => onTrackChange(e.target.value)); });
     document.getElementById('resetProgBtn').addEventListener('click', () => {
-      confirmAction('進行データ（クリア状況）を<b>すべて削除</b>しますか？<br><span style="color:var(--muted);font-size:12px">この操作は取り消せません。</span>', () => {
-        unlocked = 0; resumeIndex = 0; saveProgress();
+      confirmAction('<b>メイン・フリー両方</b>の進行データ（クリア状況）を<b>すべて削除</b>しますか？<br><span style="color:var(--muted);font-size:12px">この操作は取り消せません。</span>', () => {
+        unlocked = 0; resumeIndex = 0; li = 0; saveProgress();
+        freeCleared = new Set(); freeResume = 0; saveFreeProgress();
         if (!document.getElementById('app').classList.contains('hidden')) loadLevel(0);
         renderTitleButtons();
-        toast('進行データをリセットしました');
+        toast('進行データ（メイン・フリー）をリセットしました');
       });
     });
 
@@ -2850,10 +3063,18 @@
     showScreen('title');   // アウトゲーム：まずタイトル画面から
     (function () {
       const bv = document.getElementById('bgvideo');
-      const tryPlay = () => { if (settings.video && bv && bv.paused) { const p = bv.play(); if (p && p.catch) p.catch(() => { }); } };
+      if (!bv) return;
+      const tryPlay = () => { if (settings.video && bv.paused) { const p = bv.play(); if (p && p.catch) p.catch(() => { }); } };
       tryPlay();
       document.addEventListener('pointerdown', tryPlay, { once: false });
       document.addEventListener('visibilitychange', () => { if (!document.hidden) tryPlay(); });
+      // 意図しない一時停止（省電力・可視性制御・デコード詰まり等）からの自動リジューム。
+      // 設定で背景動画をOFFにしたときの pause は applyVideoSetting が display:none にするので対象外。
+      bv.addEventListener('pause', () => { if (settings.video && bv.style.display !== 'none') setTimeout(tryPlay, 120); });
+      bv.addEventListener('stalled', tryPlay);
+      bv.addEventListener('suspend', tryPlay);
+      // 保険：数秒ごとに再生状態を監視して、止まっていたら再開
+      setInterval(() => { if (settings.video && bv.style.display !== 'none' && bv.paused && !document.hidden) tryPlay(); }, 4000);
     })();
     // BGMは自動再生制限があるため、最初のユーザー操作で確実にキックする
     (function () {
@@ -2862,6 +3083,10 @@
       document.addEventListener('keydown', kick, { once: false });
       document.addEventListener('visibilitychange', () => { if (!document.hidden) MUSIC.resume(); });
     })();
+    // オフラインでも遊べるようにサービスワーカーを登録（http/https のときだけ。file:// では無効）
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { }); });
+    }
   </script>
 </body>
 
